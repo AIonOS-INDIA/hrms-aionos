@@ -1,0 +1,1 @@
+revoke execute on function public.guard_leave_request_validity() from public, anon, authenticated;

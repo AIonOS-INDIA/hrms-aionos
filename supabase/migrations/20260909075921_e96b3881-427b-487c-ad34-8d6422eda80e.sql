@@ -1,0 +1,1 @@
+DELETE FROM public.policies WHERE title = 'Remote Work Charter 2026'; DELETE FROM public.holidays WHERE name = 'Founders Day';
