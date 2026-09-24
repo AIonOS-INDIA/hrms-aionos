@@ -1033,6 +1033,7 @@ export type Database = {
       }
       holidays: {
         Row: {
+          company_id: string | null
           created_at: string
           holiday_date: string
           id: string
@@ -1040,6 +1041,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           holiday_date: string
           id?: string
@@ -1047,13 +1049,22 @@ export type Database = {
           name: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           holiday_date?: string
           id?: string
           location?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "holidays_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       interviews: {
         Row: {
@@ -1291,6 +1302,30 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_attempts: {
+        Row: {
+          created_at: string
+          email: string
+          last_sent_at: string
+          sent_count: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          last_sent_at?: string
+          sent_count?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          last_sent_at?: string
+          sent_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payroll_runs: {
         Row: {
           company_id: string
@@ -1476,6 +1511,7 @@ export type Database = {
         Row: {
           body: string
           category: string
+          company_id: string | null
           created_at: string
           effective_from: string
           id: string
@@ -1484,6 +1520,7 @@ export type Database = {
         Insert: {
           body: string
           category?: string
+          company_id?: string | null
           created_at?: string
           effective_from?: string
           id?: string
@@ -1492,10 +1529,73 @@ export type Database = {
         Update: {
           body?: string
           category?: string
+          company_id?: string | null
           created_at?: string
           effective_from?: string
           id?: string
           title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      protectra_staging: {
+        Row: {
+          band: string
+          date_of_birth: string | null
+          email: string
+          employee_code: string
+          employment_type: Database["public"]["Enums"]["employment_type"]
+          exit_on: string | null
+          full_name: string
+          gender: Database["public"]["Enums"]["gender_type"]
+          hired_from: string
+          job_title: string
+          joined_on: string
+          legal_entity: string
+          manager_name: string
+          office_city: string
+          status: Database["public"]["Enums"]["employment_status"]
+        }
+        Insert: {
+          band: string
+          date_of_birth?: string | null
+          email: string
+          employee_code: string
+          employment_type: Database["public"]["Enums"]["employment_type"]
+          exit_on?: string | null
+          full_name: string
+          gender: Database["public"]["Enums"]["gender_type"]
+          hired_from: string
+          job_title: string
+          joined_on: string
+          legal_entity: string
+          manager_name: string
+          office_city: string
+          status: Database["public"]["Enums"]["employment_status"]
+        }
+        Update: {
+          band?: string
+          date_of_birth?: string | null
+          email?: string
+          employee_code?: string
+          employment_type?: Database["public"]["Enums"]["employment_type"]
+          exit_on?: string | null
+          full_name?: string
+          gender?: Database["public"]["Enums"]["gender_type"]
+          hired_from?: string
+          job_title?: string
+          joined_on?: string
+          legal_entity?: string
+          manager_name?: string
+          office_city?: string
+          status?: Database["public"]["Enums"]["employment_status"]
         }
         Relationships: []
       }

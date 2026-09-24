@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { fetchAll } from "@/lib/fetch-all";
 import { supabase } from "@/integrations/supabase/client";
 
 export type AppRole =
@@ -222,13 +223,20 @@ export function useEmployees() {
     queryKey: ["employees"],
     staleTime: 120_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("full_name")
-        .range(0, 9999);
-      if (error) throw error;
-      return (data ?? []) as Employee[];
+      const all: Employee[] = [];
+      const PAGE = 1000;
+      for (let from = 0; from < 20000; from += PAGE) {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("*")
+          .order("full_name")
+          .order("id")
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        all.push(...((data ?? []) as Employee[]));
+        if (!data || data.length < PAGE) break;
+      }
+      return all;
     },
   });
 }
@@ -310,13 +318,14 @@ export function useEntityFieldValues() {
     queryKey: ["entity_field_values"],
     staleTime: 300_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("entity_field_values")
-        .select("id,company_id,field,value,active,sort_order")
-        .order("sort_order")
-        .order("value")
-        .range(0, 9999);
-      if (error) throw error;
+      const data = await fetchAll<EntityFieldValue>(() =>
+        supabase
+          .from("entity_field_values")
+          .select("id,company_id,field,value,active,sort_order")
+          .order("sort_order")
+          .order("value")
+          .order("id"),
+      );
       return (data ?? []) as EntityFieldValue[];
     },
   });
@@ -341,12 +350,9 @@ export function useHeadcounts() {
     queryKey: ["employee_headcounts"],
     staleTime: 300_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("company_id,status")
-        .neq("status", "offboarded")
-        .range(0, 9999);
-      if (error) throw error;
+      const data = await fetchAll<{ company_id: string }>(() =>
+        supabase.from("employees").select("company_id,status").neq("status", "offboarded").order("id"),
+      );
       const map: Record<string, number> = {};
       for (const row of (data ?? []) as { company_id: string }[]) {
         map[row.company_id] = (map[row.company_id] ?? 0) + 1;
@@ -447,6 +453,7 @@ export function usePolicies() {
         category: string;
         body: string;
         effective_from: string;
+        company_id: string | null;
       }[];
     },
   });
@@ -467,6 +474,7 @@ export function useHolidays() {
         name: string;
         holiday_date: string;
         location: string;
+        company_id: string | null;
       }[];
     },
   });
@@ -872,11 +880,11 @@ function useTable<T>(table: string, orderBy?: string, ascending = true) {
   return useQuery({
     queryKey: [table],
     queryFn: async () => {
-      let q = supabase.from(table as never).select("*").range(0, 9999);
-      if (orderBy) q = q.order(orderBy, { ascending });
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as T[];
+      return fetchAll<T>(() => {
+        let q = supabase.from(table as never).select("*");
+        if (orderBy) q = q.order(orderBy as never, { ascending });
+        return q.order("id" as never);
+      });
     },
   });
 }
@@ -1323,14 +1331,19 @@ export function useMyOrg() {
     enabled: !!rootId,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .neq("status", "offboarded")
-        .order("full_name")
-        .limit(10000);
-      if (error) throw error;
-      const all = (data ?? []) as Employee[];
+      const all: Employee[] = [];
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("*")
+          .neq("status", "offboarded")
+          .order("full_name")
+          .order("id")
+          .range(from, from + 999);
+        if (error) throw error;
+        all.push(...((data ?? []) as Employee[]));
+        if (!data || data.length < 1000) break;
+      }
       const byManager = new Map<string, Employee[]>();
       for (const e of all) {
         if (!e.manager_id) continue;

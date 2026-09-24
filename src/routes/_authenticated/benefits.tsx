@@ -47,7 +47,7 @@ function BenefitsBody() {
   const { data: enrollments = [] } = useBenefitEnrollments();
   const queryClient = useQueryClient();
 
-  const isHr = !!me?.isMaster || !!me?.hrCompanyId;
+  const isHr = !!me?.isMaster || !!me?.hrCompanyIds?.length;
   const isMaster = !!me?.isMaster;
   const myId = me?.employee?.id;
 
@@ -86,7 +86,7 @@ function BenefitsBody() {
     mutationFn: async () => {
       if (!planForm.name.trim()) throw new Error("Name the plan");
       const { error } = await supabase.from("benefit_plans").insert({
-        company_id: planForm.scope === "group" ? null : (companyId ?? me?.hrCompanyId ?? null),
+        company_id: planForm.scope === "group" ? null : (companyId && (isMaster || me?.hrCompanyIds.includes(companyId)) ? companyId : (me?.hrCompanyIds[0] ?? me?.hrCompanyId ?? null)),
         name: planForm.name.trim(),
         category: planForm.category,
         provider: planForm.provider,

@@ -67,11 +67,12 @@ const roleLabel = (r: string) =>
   r === "master_hr" ? "Master HR" : r === "company_hr" ? "Company HR" : "Employee";
 
 function suggestPassword() {
-  const words = ["harbor", "cobalt", "lantern", "quartz", "meridian", "falcon", "tundra"];
-  const w = words[Math.floor(Math.random() * words.length)];
-  const n = Math.floor(1000 + Math.random() * 8999);
-  return `Aio-${w}-${n}!`;
+  const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789-_!@#";
+  const bytes = new Uint32Array(20);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
+
 
 const cleanDomain = (v: string) =>
   v

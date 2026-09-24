@@ -48,6 +48,36 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
     if (!employee) return { sent: false as const };
     if (employee.status === "offboarded") return { sent: false as const };
 
+    // Abuse gate: at most one link every 2 minutes and 5 per hour per address.
+    const db = supabaseAdmin as unknown as {
+      from: (t: string) => any;
+    };
+    const now = Date.now();
+    const { data: attempt } = await db
+      .from("password_reset_attempts")
+      .select("email,last_sent_at,sent_count")
+      .eq("email", email)
+      .maybeSingle();
+    if (attempt) {
+      const last = new Date(attempt.last_sent_at as string).getTime();
+      const withinHour = now - last < 60 * 60 * 1000;
+      if (now - last < 2 * 60 * 1000) return { sent: false as const };
+      if (withinHour && Number(attempt.sent_count ?? 0) >= 5) return { sent: false as const };
+      await db
+        .from("password_reset_attempts")
+        .update({
+          last_sent_at: new Date(now).toISOString(),
+          sent_count: withinHour ? Number(attempt.sent_count ?? 0) + 1 : 1,
+          updated_at: new Date(now).toISOString(),
+        })
+        .eq("email", email);
+    } else {
+      await db
+        .from("password_reset_attempts")
+        .insert({ email, last_sent_at: new Date(now).toISOString(), sent_count: 1 });
+    }
+
+
     // First-time users have no login yet: create one silently so the
     // reset link they receive lets them set their own password.
     if (!employee.user_id) {

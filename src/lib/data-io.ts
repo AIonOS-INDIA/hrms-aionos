@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetch-all";
 import { supabase } from "@/integrations/supabase/client";
 
 export type RefKind = "company" | "employee" | "leave_type" | "job" | "course" | "plan";
@@ -44,9 +45,7 @@ const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
 
 export async function loadCtx(): Promise<Ctx> {
   const pick = async (table: string, cols: string) => {
-    const { data, error } = await supabase.from(table as never).select(cols).range(0, 9999);
-    if (error) throw error;
-    return (data ?? []) as unknown as Record<string, string>[];
+    return fetchAll<Record<string, string>>(() => supabase.from(table as never).select(cols).order("id" as never));
   };
   const [companies, employees, leaveTypes, jobs, courses, plans, timesheets, assets] = await Promise.all([
     pick("companies", "id,code,name"),
@@ -618,8 +617,7 @@ export function templateRow(spec: Spec): Row {
 }
 
 export async function exportSpec(spec: Spec, ctx: Ctx): Promise<Row[]> {
-  const { data, error } = await supabase.from(spec.table as never).select("*").range(0, 9999);
-  if (error) throw error;
+  const data = await fetchAll<unknown>(() => supabase.from(spec.table as never).select("*").order("id" as never));
   return ((data ?? []) as unknown as Record<string, unknown>[]).map((dbRow) => {
     const out: Row = {};
     if (spec.key === "timesheet_entries") {
@@ -650,11 +648,9 @@ export async function importSpec(spec: Spec, rows: Row[], ctx: Ctx): Promise<Imp
   const result: ImportResult = { inserted: 0, updated: 0, skipped: [] };
   if (!rows.length) return result;
 
-  const { data: existingRaw, error: exErr } = await supabase
-    .from(spec.table as never)
-    .select("*")
-    .range(0, 9999);
-  if (exErr) throw exErr;
+  const existingRaw = await fetchAll<unknown>(() =>
+    supabase.from(spec.table as never).select("*").order("id" as never),
+  );
   const existing = (existingRaw ?? []) as unknown as Record<string, unknown>[];
 
   const existingByKey = new Map<string, string>();
@@ -723,7 +719,7 @@ export async function importSpec(spec: Spec, rows: Row[], ctx: Ctx): Promise<Imp
   }
 
   if (spec.key === "employees" && managerFixes.length) {
-    const { data } = await supabase.from("employees").select("id,email").range(0, 9999);
+    const data = await fetchAll<{ id: string; email: string }>(() => supabase.from("employees").select("id,email").order("id"));
     const byEmail = new Map(
       ((data ?? []) as { id: string; email: string }[]).map((e) => [norm(e.email), e.id]),
     );

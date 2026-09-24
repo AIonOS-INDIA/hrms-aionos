@@ -43,3 +43,6 @@
 ## Entity setup & exit settlement
 - [x] Entity setup page: legal entity, email domain, salary structure split, deduction rules
 - [x] Exit workflow routes final settlement, unpaid leave and approved expenses to finance (payroll approvers can pay out and close)
+
+- [x] Re-scan security, fix remaining findings
+- [x] Verify dashboard/org counts match real employee numbers
