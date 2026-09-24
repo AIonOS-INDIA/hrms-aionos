@@ -42,13 +42,13 @@ function SignIn() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       if (error) throw error;
-      const { data } = await supabase.auth.getSession();
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (!data.session) throw new Error("Sign in succeeded but no session was created");
+      await navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign in failed");
     } finally {
