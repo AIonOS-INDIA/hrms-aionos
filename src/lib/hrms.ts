@@ -10,7 +10,10 @@ export type AppRole =
   | "employee"
   | "finance_expense"
   | "finance_payroll"
-  | "it_asset";
+  | "it_asset"
+  | "hr_head"
+  | "admin_facilities"
+  | "legal";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   master_hr: "Master HR",
@@ -19,6 +22,9 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   finance_expense: "Expense approver",
   finance_payroll: "Payroll approver",
   it_asset: "IT asset manager",
+  hr_head: "HR Head",
+  admin_facilities: "Admin / Facilities",
+  legal: "Legal reviewer",
 };
 
 export type Company = {
@@ -1017,6 +1023,9 @@ export type SeparationRequest = {
   unpaid_leave_amount: number;
   expense_reimbursement_amount: number;
   finance_routed_at: string | null;
+  separation_kind?: string;
+  initiated_by?: string | null;
+  resignation_form?: Record<string, unknown>;
   created_at: string;
 };
 

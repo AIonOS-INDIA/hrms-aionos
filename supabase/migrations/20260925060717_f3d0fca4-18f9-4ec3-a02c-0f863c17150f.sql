@@ -1,0 +1,1 @@
+ALTER FUNCTION private.business_days_between(timestamptz, timestamptz) SET search_path = public;

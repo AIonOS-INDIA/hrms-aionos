@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ import {
   useLeaveTypes,
   useMe,
 } from "@/lib/hrms";
+import { queueApprovalCards } from "@/lib/actionable-cards.functions";
 
 export const Route = createFileRoute("/_authenticated/leave")({
   head: () => ({
@@ -47,6 +49,7 @@ function LeaveBody() {
   const { data: requests = [] } = useLeaveRequests();
   const { data: balances = [] } = useLeaveBalances(me?.employee?.id);
   const queryClient = useQueryClient();
+  const queueCards = useServerFn(queueApprovalCards);
 
   const isHr = !!me?.isMaster || !!me?.hrCompanyId;
   const myId = me?.employee?.id;
@@ -80,7 +83,7 @@ function LeaveBody() {
       const typeId = form.leave_type_id || types[0]?.id;
       if (!typeId) throw new Error("Pick a leave type");
       if (form.end_date < form.start_date) throw new Error("End date is before the start date");
-      const { error } = await supabase.from("leave_requests").insert({
+      const { data, error } = await supabase.from("leave_requests").insert({
         employee_id: myId,
         leave_type_id: typeId,
         start_date: form.start_date,
@@ -88,11 +91,13 @@ function LeaveBody() {
         days: daysBetween(form.start_date, form.end_date),
         reason: form.reason,
         status: "pending",
-      });
+      }).select("id").single();
       if (error) throw error;
+      return data.id;
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
       toast.success("Leave request submitted");
+      void queueCards({ data: { kind: "leave", id } }).catch(() => undefined);
       setForm({ ...form, reason: "" });
       queryClient.invalidateQueries({ queryKey: ["leave_requests"] });
     },

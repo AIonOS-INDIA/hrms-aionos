@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell, FilterNote, EntityTag, Panel, StatCard, useScope } from "@/components/AppShell";
 import { Input, Select } from "@/routes/_authenticated/employees";
 import { AssetPanel } from "@/components/AssetPanel";
+import { SeparationWorkflow, EXIT_REASONS, TERMINATION_REASONS } from "@/components/SeparationWorkflow";
+import { DepartmentHeadsPanel } from "@/components/DepartmentHeadsPanel";
 import {
   computeExitSettlement,
   fmtDate,
@@ -16,6 +18,7 @@ import {
   useLeaveBalances,
   useEmployeeAssets,
   useMe,
+  useMyOrg,
   useSalaryStructures,
   useSeparationRequests,
   DEFAULT_PAY_SETTINGS,
@@ -135,25 +138,31 @@ function SeparationBody() {
     );
   }, [employees, me?.payrollCompanyIds]);
 
-  const visible =
-    isHr || isFinance
-      ? rows.filter(
-          (r) =>
-            (isHr && scopedIds.has(r.employee_id)) ||
-            (isFinance && financeIds.has(r.employee_id)) ||
-            r.employee_id === myId ||
-            !!empOf(r.employee_id)?.manager_id &&
-              empOf(r.employee_id)?.manager_id === myId,
-        )
-      : rows.filter(
-          (r) => r.employee_id === myId || empOf(r.employee_id)?.manager_id === myId,
-        );
+  const empOf = (id: string) => employees.find((e) => e.id === id);
+  // Rows are already limited by access rules; HR additionally narrows by the entity picked above.
+  const visible = rows.filter(
+    (r) =>
+      !isHr ||
+      scopedIds.has(r.employee_id) ||
+      (isFinance && financeIds.has(r.employee_id)) ||
+      r.employee_id === myId ||
+      r.initiated_by === myId ||
+      empOf(r.employee_id)?.manager_id === myId,
+  );
+  const { data: org } = useMyOrg();
+  const terminable = useMemo(() => {
+    const base = isHr
+      ? employees.filter((e) => (companyId ? e.company_id === companyId : true))
+      : (org?.everyone ?? []);
+    return base
+      .filter((e) => e.id !== myId && e.status !== "offboarded")
+      .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [isHr, employees, companyId, org?.everyone, myId]);
 
   const [openId, setOpenId] = useState("");
   const [tile, setTile] = useState<string | null>(null);
   const activeId = openId || (visible[0]?.id ?? "");
   const active = visible.find((r) => r.id === activeId);
-  const empOf = (id: string) => employees.find((e) => e.id === id);
 
   const activeEmp = active ? empOf(active.employee_id) : undefined;
   const isManagerOfActive = !!activeEmp && !!myId && activeEmp.manager_id === myId;
@@ -190,6 +199,7 @@ function SeparationBody() {
 
   const [notice, setNotice] = useState({
     reason: "",
+    comments: "",
     resignation_type: "resignation",
     notice_days: "60",
     requested_last_day: addDays(60),
@@ -198,12 +208,18 @@ function SeparationBody() {
   const raise = useMutation({
     mutationFn: async () => {
       if (!myId) throw new Error("No employee record linked to your account");
-      if (visible.some((r) => !["completed", "withdrawn", "rejected"].includes(r.stage)))
-        throw new Error("You already have a separation in progress");
+      if (!notice.reason) throw new Error("Pick a reason for leaving");
+      if (myOpen) throw new Error("You already have a separation in progress");
       const { error } = await supabase.from("separation_requests").insert({
         employee_id: myId,
         reason: notice.reason,
         resignation_type: notice.resignation_type,
+        separation_kind: "voluntary",
+        resignation_form: {
+          reason: notice.reason,
+          last_day: notice.requested_last_day,
+          comments: notice.comments,
+        },
         notice_date: today(),
         notice_days: Number(notice.notice_days) || 0,
         requested_last_day: notice.requested_last_day,
@@ -211,8 +227,8 @@ function SeparationBody() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Notice submitted to HR");
-      setNotice({ ...notice, reason: "" });
+      toast.success("Resignation submitted — your manager and HR have been told");
+      setNotice({ ...notice, reason: "", comments: "" });
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -237,85 +253,79 @@ function SeparationBody() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const finish = useMutation({
-    mutationFn: async (row: SeparationRequest) => {
-      const { error } = await supabase
-        .from("separation_requests")
+  /** Approved travel claims are paid out with the full & final settlement. */
+  const payClaims = async (row: SeparationRequest) => {
+    const due = claims.filter((c) => c.employee_id === row.employee_id && c.status === "approved");
+    for (const claim of due) {
+      await supabase
+        .from("expense_claims")
         .update({
-          finance_status: "approved",
-          finance_decided_at: new Date().toISOString(),
-          settlement_paid_on: hr.settlement_paid_on || today(),
-          settlement_amount: Number(hr.settlement_amount) || 0,
-          final_salary_amount: worksheet?.finalSalary ?? 0,
-          leave_encashment_days: worksheet?.encashDays ?? 0,
-          leave_encashment_amount: worksheet?.encashAmount ?? 0,
-          unpaid_leave_days: worksheet?.unpaidDays ?? 0,
-          unpaid_leave_amount: worksheet?.unpaidAmount ?? 0,
-          expense_reimbursement_amount: worksheet?.expenses ?? 0,
-          finance_note: hr.finance_note,
-          stage: "completed",
+          status: "reimbursed",
+          reimbursed_on: today(),
+          reimbursed_amount: Number(claim.total_amount),
+          payment_reference: "Full & final settlement",
         })
-        .eq("id", row.id);
+        .eq("id", claim.id);
+    }
+    queryClient.invalidateQueries({ queryKey: ["expense_claims"] });
+  };
+
+  const revoke = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc("revoke_my_resignation" as never, { _sep_id: id } as never);
       if (error) throw error;
-
-      // Approved travel claims are paid out with the settlement.
-      const dueClaimIds = claims
-        .filter((c) => c.employee_id === row.employee_id && c.status === "approved")
-        .map((c) => c.id);
-      for (const claimId of dueClaimIds) {
-        const claim = claims.find((c) => c.id === claimId)!;
-        await supabase
-          .from("expense_claims")
-          .update({
-            status: "reimbursed",
-            reimbursed_on: hr.settlement_paid_on || today(),
-            reimbursed_amount: Number(claim.total_amount),
-            payment_reference: "Full & final settlement",
-          })
-          .eq("id", claimId);
-      }
-
-      const { error: empError } = await supabase
-        .from("employees")
-        .update({ status: "offboarded", exit_on: row.approved_last_day ?? row.requested_last_day })
-        .eq("id", row.employee_id);
-      if (empError) throw empError;
     },
     onSuccess: () => {
-      toast.success("Full & final settled, exit recorded");
-      queryClient.invalidateQueries({ queryKey: ["expense_claims"] });
+      toast.success("Resignation revoked — HR and your manager have been told");
       refresh();
+      queryClient.invalidateQueries({ queryKey: ["separation_tasks"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Editable desk fields for the open record
-  const [hr, setHr] = useState({
-    manager_note: "",
-    approved_last_day: "",
-    hr_note: "",
-    it_assets: "",
-    it_note: "",
-    finance_note: "",
-    settlement_amount: "0",
-    settlement_paid_on: today(),
+  const [term, setTerm] = useState({
+    employee_id: "",
+    search: "",
+    reason: "",
+    effective_date: addDays(30),
+    supporting_docs: false,
+    details: "",
   });
-  const [loadedFor, setLoadedFor] = useState("");
-  if (active && loadedFor !== active.id) {
-    setLoadedFor(active.id);
-    setHr({
-      manager_note: active.manager_note,
-      approved_last_day: active.approved_last_day ?? active.requested_last_day,
-      hr_note: active.hr_note,
-      it_assets: active.it_assets,
-      it_note: active.it_note,
-      finance_note: active.finance_note,
-      settlement_amount: String(
-        Number(active.settlement_amount) || worksheet?.net || 0,
-      ),
-      settlement_paid_on: active.settlement_paid_on ?? today(),
-    });
-  }
+  const terminate = useMutation({
+    mutationFn: async () => {
+      if (!term.employee_id) throw new Error("Pick the employee");
+      if (!term.reason) throw new Error("Pick a reason for termination");
+      if (!term.effective_date) throw new Error("Set the termination effective date");
+      const { error } = await supabase.rpc("initiate_termination" as never, {
+        _employee_id: term.employee_id,
+        _form: {
+          reason: term.reason,
+          effective_date: term.effective_date,
+          supporting_docs: term.supporting_docs,
+          details: term.details,
+        },
+      } as never);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Termination started — the next approver, Legal and the HR Head have been told");
+      setTerm({ ...term, employee_id: "", search: "", reason: "", details: "", supporting_docs: false });
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const termMatches = term.search.trim()
+    ? terminable
+        .filter((e) =>
+          `${e.full_name} ${e.email} ${e.employee_code ?? ""}`.toLowerCase().includes(term.search.toLowerCase()),
+        )
+        .slice(0, 8)
+    : [];
+  const termPicked = terminable.find((e) => e.id === term.employee_id);
+
+  useEffect(() => {
+    void supabase.rpc("run_separation_escalations" as never);
+  }, []);
 
   const openCount = visible.filter(
     (r) => !["completed", "withdrawn", "rejected"].includes(r.stage),
@@ -400,7 +410,7 @@ function SeparationBody() {
                         <td className="px-4 py-3">
                           <p className="font-medium">{emp?.full_name ?? "—"}</p>
                           <p className="text-[11px] font-mono text-ink-soft">
-                            notice {fmtDate(r.notice_date)}
+                            {r.separation_kind === "involuntary" ? "termination" : "notice"} {fmtDate(r.notice_date)}
                           </p>
                         </td>
                         {canSeeAll && isHr && (
@@ -450,324 +460,87 @@ function SeparationBody() {
               <div className="p-4 space-y-4">
                 <div className="grid sm:grid-cols-3 gap-3 text-[13px]">
                   <div>
-                    <p className="label-mono mb-1">Reason</p>
+                    <p className="label-mono mb-1">
+                      {active.separation_kind === "involuntary" ? "Termination · reason" : "Resignation · reason"}
+                    </p>
                     <p>{active.reason || "—"}</p>
                   </div>
                   <div>
-                    <p className="label-mono mb-1">Notice period</p>
-                    <p>{active.notice_days} days</p>
+                    <p className="label-mono mb-1">
+                      {active.separation_kind === "involuntary" ? "Started by" : "Notice period"}
+                    </p>
+                    <p>
+                      {active.separation_kind === "involuntary"
+                        ? (empOf(active.initiated_by ?? "")?.full_name ?? "—")
+                        : `${active.notice_days} days`}
+                    </p>
                   </div>
                   <div>
-                    <p className="label-mono mb-1">Requested last day</p>
+                    <p className="label-mono mb-1">
+                      {active.separation_kind === "involuntary" ? "Effective date" : "Requested last day"}
+                    </p>
                     <p>{fmtDate(active.requested_last_day)}</p>
                   </div>
                 </div>
 
-                {/* Direct manager */}
-                <div className="rounded-md ring-1 ring-line p-3 space-y-3">
-                  <p className="label-mono">
-                    Step 1 · Direct manager — {active.manager_status}
-                    {active.manager_decided_at
-                      ? ` · ${fmtDate(active.manager_decided_at.slice(0, 10))}`
-                      : ""}
-                  </p>
-                  {isManagerOfActive && active.manager_status === "pending" ? (
-                    <>
-                      <Input
-                        label="Manager note (handover, cover, last day)"
-                        value={hr.manager_note}
-                        onChange={(v) => setHr({ ...hr, manager_note: v })}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() =>
-                            patch.mutate({
-                              id: active.id,
-                              values: {
-                                manager_status: "approved",
-                                manager_note: hr.manager_note,
-                                manager_decided_at: new Date().toISOString(),
-                                stage: "hr_review",
-                              },
-                            })
-                          }
-                          className="h-9 px-3 rounded-md bg-brand text-paper text-[12px] font-semibold cursor-pointer hover:bg-brand-deep"
-                        >
-                          Accept & send to HR
-                        </button>
-                        <button
-                          onClick={() =>
-                            patch.mutate({
-                              id: active.id,
-                              values: {
-                                manager_status: "rejected",
-                                manager_note: hr.manager_note,
-                                manager_decided_at: new Date().toISOString(),
-                              },
-                            })
-                          }
-                          className="h-9 px-3 rounded-md ring-1 ring-line text-[12px] font-medium text-destructive cursor-pointer hover:bg-ink/5"
-                        >
-                          Raise a concern
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-[13px] text-ink-soft">
-                      {active.manager_note ||
-                        (active.manager_status === "pending"
-                          ? "Waiting for the reporting manager to acknowledge the notice."
-                          : "Manager decision recorded.")}
-                    </p>
-                  )}
-                </div>
+                {activeEmp && (
+                  <SeparationWorkflow
+                    separation={active}
+                    employee={activeEmp}
+                    me={me}
+                    openAssetCount={openAssets.length}
+                    employeesById={(id) => (id ? empOf(id) : undefined)}
+                    companyName={companyById(activeEmp.company_id)?.name ?? "the company"}
+                    fnfDefaults={{
+                      last_day: active.approved_last_day ?? active.requested_last_day,
+                      final_salary: String(worksheet?.finalSalary ?? 0),
+                      encash_days: String(worksheet?.encashDays ?? 0),
+                      encash_amount: String(worksheet?.encashAmount ?? 0),
+                      unpaid_days: String(worksheet?.unpaidDays ?? 0),
+                      unpaid_amount: String(worksheet?.unpaidAmount ?? 0),
+                      expenses: String(worksheet?.expenses ?? 0),
+                      reimbursement_pending: (worksheet?.expenses ?? 0) > 0 ? "Yes" : "No",
+                      total_payable: String(
+                        (worksheet?.finalSalary ?? 0) + (worksheet?.encashAmount ?? 0) + (worksheet?.expenses ?? 0),
+                      ),
+                      total_recoverable: String(worksheet?.unpaidAmount ?? 0),
+                      net_payable: String(worksheet?.net ?? 0),
+                      paid_on: today(),
+                      approved_by: "Payroll",
+                    }}
+                    onFnfDone={() => payClaims(active)}
+                  />
+                )}
 
-                {/* HR */}
-                <div className="rounded-md ring-1 ring-line p-3 space-y-3">
-                  <p className="label-mono">
-                    Step 2 · HR separation details — {active.hr_status}
-                  </p>
-                  {isHr ? (
-                    <>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <Input
-                          label="Agreed last working day"
-                          type="date"
-                          value={hr.approved_last_day}
-                          onChange={(v) => setHr({ ...hr, approved_last_day: v })}
-                        />
-                        <Input
-                          label="HR note"
-                          value={hr.hr_note}
-                          onChange={(v) => setHr({ ...hr, hr_note: v })}
-                        />
-                      </div>
-                      <label className="flex items-center gap-2 text-[13px]">
-                        <input
-                          type="checkbox"
-                          className="size-4 accent-black cursor-pointer"
-                          checked={active.exit_interview_done}
-                          onChange={(e) =>
-                            patch.mutate({
-                              id: active.id,
-                              values: { exit_interview_done: e.target.checked },
-                            })
-                          }
-                        />
-                        Exit interview done
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() =>
-                            patch.mutate({
-                              id: active.id,
-                              values: {
-                                hr_status: "approved",
-                                hr_note: hr.hr_note,
-                                approved_last_day: hr.approved_last_day,
-                                hr_decided_at: new Date().toISOString(),
-                                stage: "it_clearance",
-                              },
-                            })
-                          }
-                          disabled={active.hr_status === "approved"}
-                          className="h-9 px-3 rounded-md bg-brand text-paper text-[12px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-50"
-                        >
-                          Accept & send to IT
-                        </button>
-                        <button
-                          onClick={() =>
-                            patch.mutate({
-                              id: active.id,
-                              values: {
-                                hr_status: "rejected",
-                                hr_note: hr.hr_note,
-                                hr_decided_at: new Date().toISOString(),
-                                stage: "rejected",
-                              },
-                            })
-                          }
-                          className="h-9 px-3 rounded-md ring-1 ring-line text-[12px] font-medium text-destructive cursor-pointer hover:bg-ink/5"
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-[13px] text-ink-soft">
-                      {active.hr_note || "Your HR team is confirming the details."}
-                    </p>
-                  )}
-                </div>
-
-                {/* IT */}
-                <div className="rounded-md ring-1 ring-line p-3 space-y-3">
-                  {openAssets.length > 0 && (
-                    <p className="text-[12.5px] text-ink-soft">
-                      {openAssets.length} item{openAssets.length === 1 ? "" : "s"} still with this
-                      person — mark each one returned in the asset list below.
-                    </p>
-                  )}
-                  <p className="label-mono">Step 3 · IT asset return — {active.it_status}</p>
-                  {isHr ? (
-                    <>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <Input
-                          label="Assets to return"
-                          value={hr.it_assets}
-                          onChange={(v) => setHr({ ...hr, it_assets: v })}
-                        />
-                        <Input
-                          label="IT note"
-                          value={hr.it_note}
-                          onChange={(v) => setHr({ ...hr, it_note: v })}
-                        />
-                      </div>
-                      <button
-                        onClick={() =>
-                          patch.mutate({
-                            id: active.id,
-                             values: {
-                               it_status: "approved",
-                               it_assets: hr.it_assets,
-                               it_note: hr.it_note,
-                               it_decided_at: new Date().toISOString(),
-                               stage: "finance_settlement",
-                               finance_routed_at: new Date().toISOString(),
-                               final_salary_amount: worksheet?.finalSalary ?? 0,
-                               leave_encashment_days: worksheet?.encashDays ?? 0,
-                               leave_encashment_amount: worksheet?.encashAmount ?? 0,
-                               unpaid_leave_days: worksheet?.unpaidDays ?? 0,
-                               unpaid_leave_amount: worksheet?.unpaidAmount ?? 0,
-                               expense_reimbursement_amount: worksheet?.expenses ?? 0,
-                               settlement_amount: worksheet?.net ?? 0,
-                             },
-                          })
-                        }
-                        disabled={
-                          active.hr_status !== "approved" ||
-                          active.it_status === "approved" ||
-                          openAssets.length > 0
-                        }
-                        className="h-9 px-3 rounded-md bg-brand text-paper text-[12px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-50"
-                      >
-                        Assets returned & access closed
-                      </button>
-                    </>
-                  ) : (
-                    <p className="text-[13px] text-ink-soft">
-                      {active.it_assets
-                        ? `To return: ${active.it_assets}`
-                        : "Nothing listed for return yet."}
-                    </p>
-                  )}
-                </div>
-
-                {/* Finance */}
-                <div className="rounded-md ring-1 ring-line p-3 space-y-3">
-                  <p className="label-mono">
-                    Step 4 · Full & final settlement — {active.finance_status}
-                    {active.finance_routed_at
-                      ? ` · with finance since ${fmtDate(active.finance_routed_at.slice(0, 10))}`
-                      : ""}
-                  </p>
-
-                  {worksheet && (
-                    <div className="rounded-md bg-brand/[0.05] ring-1 ring-brand/15 p-3 text-[13px] space-y-1">
-                      <p className="label-mono mb-1">What finance owes</p>
-                      <Line
-                        label={`Salary to ${fmtDate(active.approved_last_day ?? active.requested_last_day)}`}
-                        value={money(worksheet.finalSalary, worksheet.currency)}
-                      />
-                      <Line
-                        label={`Unused leave paid out · ${worksheet.encashDays} days`}
-                        value={money(worksheet.encashAmount, worksheet.currency)}
-                      />
-                      <Line
-                        label={`Unpaid leave recovered · ${worksheet.unpaidDays} days`}
-                        value={`− ${money(worksheet.unpaidAmount, worksheet.currency)}`}
-                      />
-                      <Line
-                        label="Approved expense claims still due"
-                        value={money(worksheet.expenses, worksheet.currency)}
-                      />
-                      <div className="pt-1.5 mt-1.5 border-t border-brand/20">
-                        <Line
-                          label="Net full & final"
-                          value={money(worksheet.net, worksheet.currency)}
-                          strong
-                        />
-                      </div>
+                {worksheet && (active.stage === "finance_settlement" || active.stage === "completed") && (
+                  <div className="rounded-md bg-brand/[0.05] ring-1 ring-brand/15 p-3 text-[13px] space-y-1">
+                    <p className="label-mono mb-1">Full & final worksheet</p>
+                    <Line
+                      label={`Salary to ${fmtDate(active.approved_last_day ?? active.requested_last_day)}`}
+                      value={money(worksheet.finalSalary, worksheet.currency)}
+                    />
+                    <Line
+                      label={`Unused leave paid out · ${worksheet.encashDays} days`}
+                      value={money(worksheet.encashAmount, worksheet.currency)}
+                    />
+                    <Line
+                      label={`Unpaid leave recovered · ${worksheet.unpaidDays} days`}
+                      value={`− ${money(worksheet.unpaidAmount, worksheet.currency)}`}
+                    />
+                    <Line label="Approved expense claims still due" value={money(worksheet.expenses, worksheet.currency)} />
+                    <div className="pt-1.5 mt-1.5 border-t border-brand/20">
+                      <Line label="Net full & final" value={money(worksheet.net, worksheet.currency)} strong />
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {isHr || isFinance ? (
-                    <>
-                      <div className="grid sm:grid-cols-3 gap-3">
-                        <Input
-                          label="Settlement amount"
-                          type="number"
-                          value={hr.settlement_amount}
-                          onChange={(v) => setHr({ ...hr, settlement_amount: v })}
-                        />
-                        <Input
-                          label="Pay out on"
-                          type="date"
-                          value={hr.settlement_paid_on}
-                          onChange={(v) => setHr({ ...hr, settlement_paid_on: v })}
-                        />
-                        <Input
-                          label="Finance note"
-                          value={hr.finance_note}
-                          onChange={(v) => setHr({ ...hr, finance_note: v })}
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() =>
-                            setHr({
-                              ...hr,
-                              settlement_amount: String(worksheet?.net ?? 0),
-                            })
-                          }
-                          className="h-9 px-3 rounded-md ring-1 ring-line text-[12px] font-medium cursor-pointer hover:bg-ink/5"
-                        >
-                          Use calculated amount
-                        </button>
-                        <button
-                          onClick={() => finish.mutate(active)}
-                          disabled={
-                            active.it_status !== "approved" ||
-                            active.stage === "completed" ||
-                            finish.isPending
-                          }
-                          className="h-9 px-3 rounded-md bg-brand text-paper text-[12px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-50"
-                        >
-                          {finish.isPending ? "Paying out…" : "Pay out & close exit"}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-[13px] text-ink-soft">
-                      {active.finance_status === "approved"
-                        ? `${money(Number(active.settlement_amount))} settled${
-                            active.settlement_paid_on
-                              ? ` on ${fmtDate(active.settlement_paid_on)}`
-                              : ""
-                          }`
-                        : "Settlement is calculated once assets are returned."}
-                    </p>
-                  )}
-                </div>
-
-                {!isHr && myOpen?.id === active.id && (
+                {myOpen?.id === active.id && active.separation_kind !== "involuntary" && (
                   <button
-                    onClick={() =>
-                      patch.mutate({ id: active.id, values: { stage: "withdrawn" } })
-                    }
+                    onClick={() => revoke.mutate(active.id)}
+                    disabled={active.stage === "finance_settlement"}
                     className="h-9 px-3 rounded-md ring-1 ring-line text-[12px] font-medium cursor-pointer hover:bg-ink/5"
                   >
-                    Withdraw my notice
+                    Revoke my resignation
                   </button>
                 )}
               </div>
@@ -779,7 +552,7 @@ function SeparationBody() {
 
         <aside className="space-y-4">
           {!myOpen && myId && (
-            <Panel title="Give notice">
+            <Panel title="Resign">
               <div className="p-4 space-y-3">
                 <Select
                   label="Type"
@@ -809,52 +582,151 @@ function SeparationBody() {
                   value={notice.requested_last_day}
                   onChange={(v) => setNotice({ ...notice, requested_last_day: v })}
                 />
-                <Input
-                  label="Reason"
+                <Select
+                  label="Reason for leaving"
                   value={notice.reason}
                   onChange={(v) => setNotice({ ...notice, reason: v })}
+                  options={[
+                    { value: "", label: "Choose…" },
+                    ...EXIT_REASONS.map((r) => ({ value: r, label: r })),
+                  ]}
+                />
+                <Input
+                  label="Comments"
+                  value={notice.comments}
+                  onChange={(v) => setNotice({ ...notice, comments: v })}
                 />
                 <button
                   onClick={() => raise.mutate()}
                   disabled={raise.isPending}
                   className="w-full h-9 rounded-md bg-brand text-paper text-[12px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-60"
                 >
-                  {raise.isPending ? "Submitting…" : "Submit notice"}
+                  {raise.isPending ? "Submitting…" : "Submit resignation"}
                 </button>
               </div>
             </Panel>
           )}
 
-          <Panel title="How it moves">
-            <ol className="p-4 space-y-3 text-[13px]">
-              <li>
-                <span className="label-mono">1 · Notice</span>
-                <p className="text-ink-soft">Employee submits notice with a proposed last day.</p>
-              </li>
-              <li>
-                <span className="label-mono">2 · Manager</span>
-                <p className="text-ink-soft">
-                  The reporting manager accepts the notice and confirms handover.
+          {(isHr || (org?.reports.length ?? 0) > 0) && (
+            <Panel title="Start a termination">
+              <div className="p-4 space-y-3">
+                <p className="text-[12px] text-ink-soft">
+                  For exits the company starts: performance, misconduct, redundancy, policy violation or absconding.
+                  The employee is not told until the HR Head approves.
                 </p>
-              </li>
-              <li>
-                <span className="label-mono">3 · HR</span>
-                <p className="text-ink-soft">
-                  HR confirms the last working day, handover and exit interview.
-                </p>
-              </li>
-              <li>
-                <span className="label-mono">4 · IT</span>
-                <p className="text-ink-soft">Laptop and other assets returned, access closed.</p>
-              </li>
-              <li>
-                <span className="label-mono">5 · Finance</span>
-                <p className="text-ink-soft">
-                  Full and final amount paid out and the exit is recorded.
-                </p>
-              </li>
+                {termPicked ? (
+                  <div className="flex items-center justify-between rounded-md ring-1 ring-line px-2.5 py-2 text-[13px]">
+                    <span>
+                      <span className="font-medium">{termPicked.full_name}</span>
+                      <span className="block text-[11px] text-ink-soft">
+                        {termPicked.job_title} · {termPicked.department}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => setTerm({ ...term, employee_id: "", search: "" })}
+                      className="text-[11px] text-ink-soft hover:text-ink cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Input
+                      label="Employee"
+                      value={term.search}
+                      onChange={(v) => setTerm({ ...term, search: v })}
+                    />
+                    {termMatches.length > 0 && (
+                      <div className="mt-1 rounded-md ring-1 ring-line divide-y divide-line max-h-56 overflow-y-auto">
+                        {termMatches.map((e) => (
+                          <button
+                            key={e.id}
+                            onClick={() => setTerm({ ...term, employee_id: e.id, search: "" })}
+                            className="w-full text-left px-2.5 py-1.5 text-[12.5px] hover:bg-brand/5 cursor-pointer"
+                          >
+                            {e.full_name}
+                            <span className="block text-[11px] text-ink-soft">{e.email}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <Select
+                  label="Reason for termination"
+                  value={term.reason}
+                  onChange={(v) => setTerm({ ...term, reason: v })}
+                  options={[
+                    { value: "", label: "Choose…" },
+                    ...TERMINATION_REASONS.map((r) => ({ value: r, label: r })),
+                  ]}
+                />
+                <Input
+                  label="Termination effective date"
+                  type="date"
+                  value={term.effective_date}
+                  onChange={(v) => setTerm({ ...term, effective_date: v })}
+                />
+                <label className="flex items-center gap-2 text-[12.5px]">
+                  <input
+                    type="checkbox"
+                    checked={term.supporting_docs}
+                    onChange={(e) => setTerm({ ...term, supporting_docs: e.target.checked })}
+                    className="size-4 accent-[var(--color-brand)]"
+                  />
+                  Supporting documents attached
+                </label>
+                <Input
+                  label="Details"
+                  value={term.details}
+                  onChange={(v) => setTerm({ ...term, details: v })}
+                />
+                <button
+                  onClick={() => terminate.mutate()}
+                  disabled={terminate.isPending}
+                  className="w-full h-9 rounded-md bg-brand text-paper text-[12px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-60"
+                >
+                  {terminate.isPending ? "Starting…" : "Start termination"}
+                </button>
+              </div>
+            </Panel>
+          )}
+
+          <Panel title="How a termination moves">
+            <ol className="p-4 space-y-2.5 text-[12.5px]">
+              {[
+                ["Started by", "HRBP or the reporting manager fills the termination request."],
+                ["Approvals, one after another", "Reporting manager → HRBP → HR Head → Legal → Payroll. Whoever started it skips their own step."],
+                ["Who is told", "Legal and HR Head when it starts; the employee once HR Head approves; Payroll and Admin once fully approved."],
+                ["Clearances", "IT and Admin clear 1 day before the last day."],
+                ["Full & final and letter", "Payroll settles 2 days after the last day, then HR issues the relieving letter."],
+                ["Escalation", "Any step untouched for 2 business days goes to the functional head, then the HR Head."],
+              ].map(([h, d]) => (
+                <li key={h}>
+                  <span className="label-mono">{h}</span>
+                  <p className="text-ink-soft">{d}</p>
+                </li>
+              ))}
             </ol>
           </Panel>
+
+          <Panel title="How a resignation moves">
+            <ol className="p-4 space-y-2.5 text-[12.5px]">
+              {[
+                ["Approvals, one after another", "Reporting manager (2 days) → HRBP (1 day) → Functional head, if one is set for the department → Payroll."],
+                ["Clearances, side by side", "IT, Finance and Admin clear 2 days before the last day; HRBP holds the exit interview the day before."],
+                ["Full & final", "Payroll settles salary, leave, recoveries and approved expenses after the last day."],
+                ["Letters & closure", "HR issues the relieving and experience letters and the exit closes."],
+                ["Escalation", "Any step untouched for 3 business days goes to the functional head, then the HR Head."],
+              ].map(([h, d]) => (
+                <li key={h}>
+                  <span className="label-mono">{h}</span>
+                  <p className="text-ink-soft">{d}</p>
+                </li>
+              ))}
+            </ol>
+          </Panel>
+          {isHr && <DepartmentHeadsPanel />}
         </aside>
       </div>
     </>

@@ -109,6 +109,9 @@ function HrAccountsPage() {
   const [expenseEntities, setExpenseEntities] = useState<string[]>([]);
   const [payrollEntities, setPayrollEntities] = useState<string[]>([]);
   const [assetEntities, setAssetEntities] = useState<string[]>([]);
+  const [hrHeadEntities, setHrHeadEntities] = useState<string[]>([]);
+  const [adminEntities, setAdminEntities] = useState<string[]>([]);
+  const [legalEntities, setLegalEntities] = useState<string[]>([]);
   const approveReq = useServerFn(approveSubsidiaryRequest);
   const rejectReq = useServerFn(rejectSubsidiaryRequest);
   const { data: requests = [] } = useSubsidiaryRequests(Boolean(me?.isMaster));
@@ -333,6 +336,9 @@ function HrAccountsPage() {
       setExpenseEntities(duties.expenseCompanyIds);
       setPayrollEntities(duties.payrollCompanyIds);
       setAssetEntities(duties.assetCompanyIds ?? []);
+      setHrHeadEntities(duties.hrHeadCompanyIds ?? []);
+      setAdminEntities(duties.adminCompanyIds ?? []);
+      setLegalEntities(duties.legalCompanyIds ?? []);
     } catch {
       /* duties stay empty when they cannot be read */
     }
@@ -370,6 +376,15 @@ function HrAccountsPage() {
           role: "it_asset",
           companyIds: assetEntities,
         },
+      });
+      await saveDuty({
+        data: { employeeId: selectedPerson.id, role: "hr_head", companyIds: hrHeadEntities },
+      });
+      await saveDuty({
+        data: { employeeId: selectedPerson.id, role: "admin_facilities", companyIds: adminEntities },
+      });
+      await saveDuty({
+        data: { employeeId: selectedPerson.id, role: "legal", companyIds: legalEntities },
       });
     },
     onSuccess: () => {
@@ -586,6 +601,9 @@ function HrAccountsPage() {
                       ["Approve expense claims", expenseEntities, setExpenseEntities],
                       ["Approve payslips and payments", payrollEntities, setPayrollEntities],
                       ["Manage IT assets and licences", assetEntities, setAssetEntities],
+                      ["HR Head (final escalation for exits)", hrHeadEntities, setHrHeadEntities],
+                      ["Admin / Facilities clearance", adminEntities, setAdminEntities],
+                      ["Legal review (terminations)", legalEntities, setLegalEntities],
                     ] as [string, string[], (fn: (prev: string[]) => string[]) => void][]
                   ).map(([label, picked, setPicked]) => (
                     <div key={label}>

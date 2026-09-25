@@ -370,7 +370,8 @@ export const SPECS: Spec[] = [
     fields: [
       f("Work date", "work_date", { kind: "date" }),
       f("Hours", "hours", { kind: "number", fallback: 0 }),
-      f("Project", "project", { fallback: "" }),
+      f("Project", "work_project", { fallback: "" }),
+      f("Task", "project", { fallback: "" }),
       f("Notes", "notes", { fallback: "" }),
     ],
     resolve: (raw, out, ctx) => {

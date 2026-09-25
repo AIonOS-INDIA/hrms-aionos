@@ -45,6 +45,12 @@ export function MasterDataPanel({
   const [draft, setDraft] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [filter, setFilter] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [moveTo, setMoveTo] = useState("");
 
   const values = useMemo(
     () =>
@@ -176,6 +182,118 @@ export function MasterDataPanel({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const merge = useMutation({
+    mutationFn: async ({ ids, target }: { ids: string[]; target: string }) => {
+      if (!companyId) throw new Error("Pick an entity first");
+      const clean = target.trim();
+      if (!clean) throw new Error("Type the value to merge into");
+      if (FIXED_FIELDS.includes(field)) throw new Error("This list uses fixed system options");
+      const sources = values.filter((v) => ids.includes(v.id));
+      if (!sources.length) throw new Error("Tick the values to merge first");
+      let targetRow = values.find((v) => v.value.toLowerCase() === clean.toLowerCase());
+      if (!targetRow) {
+        const { error } = await supabase
+          .from("entity_field_values")
+          .insert({ company_id: companyId, field, value: clean });
+        if (error) throw error;
+      }
+      const fromSet = new Set(
+        sources.map((s) => s.value.toLowerCase()).filter((v) => v !== clean.toLowerCase()),
+      );
+      const column = SOURCE[field];
+      let moved = 0;
+      if (column) {
+        const affected = employees
+          .filter(
+            (e) =>
+              e.company_id === companyId &&
+              fromSet.has(String(e[column] ?? "").trim().toLowerCase()),
+          )
+          .map((e) => e.id);
+        for (let i = 0; i < affected.length; i += 200) {
+          const { error } = await supabase
+            .from("employees")
+            .update({ [column]: clean } as never)
+            .in("id", affected.slice(i, i + 200));
+          if (error) throw error;
+        }
+        moved = affected.length;
+      }
+      if (field === "department") {
+        const { data: heads } = await supabase
+          .from("department_heads" as never)
+          .select("id,department")
+          .eq("company_id", companyId);
+        const list = (heads ?? []) as unknown as { id: string; department: string }[];
+        let hasTarget = list.some((h) => h.department.toLowerCase() === clean.toLowerCase());
+        for (const h of list) {
+          if (!fromSet.has(h.department.toLowerCase())) continue;
+          if (hasTarget) {
+            await supabase.from("department_heads" as never).delete().eq("id", h.id);
+          } else {
+            await supabase
+              .from("department_heads" as never)
+              .update({ department: clean } as never)
+              .eq("id", h.id);
+            hasTarget = true;
+          }
+        }
+      }
+      const drop = sources.filter((s) => s.value.toLowerCase() !== clean.toLowerCase()).map((s) => s.id);
+      if (drop.length) {
+        const { error } = await supabase.from("entity_field_values").delete().in("id", drop);
+        if (error) throw error;
+      }
+      targetRow = undefined;
+      return { moved, merged: drop.length };
+    },
+    onSuccess: ({ moved, merged }) => {
+      setSelected([]);
+      setMergeTarget("");
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["department_heads"] });
+      toast.success(`Merged ${merged} value${merged === 1 ? "" : "s"} · ${moved} employee record${moved === 1 ? "" : "s"} updated`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const peopleFor = (value: string) => {
+    const column = SOURCE[field];
+    if (!column) return [];
+    return employees
+      .filter(
+        (e) =>
+          e.company_id === companyId &&
+          String(e[column] ?? "").trim().toLowerCase() === value.toLowerCase(),
+      )
+      .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  };
+
+  const move = useMutation({
+    mutationFn: async ({ ids, to }: { ids: string[]; to: string }) => {
+      const column = SOURCE[field];
+      if (!column) throw new Error("This list is not stored on employee records");
+      if (!ids.length) throw new Error("Tick the people to move first");
+      if (!to) throw new Error("Pick the new value");
+      for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await supabase
+          .from("employees")
+          .update({ [column]: to } as never)
+          .in("id", ids.slice(i, i + 200));
+        if (error) throw error;
+      }
+      return ids.length;
+    },
+    onSuccess: (n) => {
+      setPicked([]);
+      setMoveTo("");
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      toast.success(`${n} employee record${n === 1 ? "" : "s"} updated`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const usedCount = (value: string) => {
     const column = SOURCE[field];
     if (!column) return 0;
@@ -185,6 +303,10 @@ export function MasterDataPanel({
         String(e[column] ?? "").trim().toLowerCase() === value.toLowerCase(),
     ).length;
   };
+  const fixedField = FIXED_FIELDS.includes(field);
+  const shownValues = filter.trim()
+    ? values.filter((v) => v.value.toLowerCase().includes(filter.trim().toLowerCase()))
+    : values;
 
   return (
     <Panel
@@ -208,7 +330,11 @@ export function MasterDataPanel({
             <button
               key={f.key}
               type="button"
-              onClick={() => setField(f.key)}
+              onClick={() => {
+                setField(f.key);
+                setSelected([]);
+                setFilter("");
+              }}
               className={`h-8 px-3 rounded-full text-[12px] ring-1 cursor-pointer ${
                 field === f.key
                   ? "bg-brand text-paper ring-brand"
@@ -254,18 +380,85 @@ export function MasterDataPanel({
           </div>
         ) : null}
 
-        <div className="rounded-md ring-1 ring-line divide-y divide-line max-h-[360px] overflow-y-auto">
-          {values.length === 0 ? (
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter this list"
+          aria-label="Filter values"
+          className="w-full h-9 px-3 rounded-md ring-1 ring-line bg-panel text-[13px]"
+        />
+
+        {canEdit && !fixedField ? (
+          <div className="rounded-md bg-brand/5 ring-1 ring-brand/20 p-3 space-y-2">
+            <p className="text-[12px] text-ink-soft">
+              <b>Clean up:</b> tick the values that mean the same thing, then merge them into one
+              name (an existing value or a new one). Every employee record using them is updated.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                list="merge-targets"
+                value={mergeTarget}
+                onChange={(e) => setMergeTarget(e.target.value)}
+                placeholder="Merge into…"
+                aria-label="Merge into"
+                className="flex-1 min-w-[180px] h-9 px-3 rounded-md ring-1 ring-line bg-panel text-[13px]"
+              />
+              <datalist id="merge-targets">
+                {values.map((v) => (
+                  <option key={v.id} value={v.value} />
+                ))}
+              </datalist>
+              <button
+                type="button"
+                disabled={merge.isPending || selected.length === 0 || !mergeTarget.trim()}
+                onClick={() => {
+                  const n = values
+                    .filter((v) => selected.includes(v.id))
+                    .reduce((s, v) => s + usedCount(v.value), 0);
+                  if (confirm(`Merge ${selected.length} value(s) into "${mergeTarget.trim()}"? ${n} employee record(s) will be updated.`))
+                    merge.mutate({ ids: selected, target: mergeTarget });
+                }}
+                className="h-9 px-4 rounded-md bg-brand text-paper text-[13px] font-medium disabled:opacity-40 cursor-pointer"
+              >
+                {merge.isPending ? "Merging…" : `Merge ${selected.length || ""} selected`}
+              </button>
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected([])}
+                  className="h-9 px-3 rounded-md ring-1 ring-line text-[13px] hover:bg-ink/5 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="rounded-md ring-1 ring-line divide-y divide-line max-h-[420px] overflow-y-auto">
+          {shownValues.length === 0 ? (
             <p className="px-3 py-6 text-[13px] text-ink-soft">
               No values yet for this list. Add one, or pull what is already on employee records.
             </p>
           ) : (
-            values.map((v) => {
+            shownValues.map((v) => {
               const used = usedCount(v.value);
               const editing = editId === v.id;
-              const fixed = FIXED_FIELDS.includes(field);
+              const fixed = fixedField;
               return (
-                <div key={v.id} className="px-3 py-2 flex items-center gap-3 flex-wrap">
+                <div key={v.id}>
+                <div className="px-3 py-2 flex items-center gap-3 flex-wrap">
+                  {canEdit && !fixed && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${v.value}`}
+                      checked={selected.includes(v.id)}
+                      onChange={(e) =>
+                        setSelected((s) => (e.target.checked ? [...s, v.id] : s.filter((x) => x !== v.id)))
+                      }
+                      className="size-4 accent-brand cursor-pointer"
+                    />
+                  )}
                   {editing ? (
                     <input
                       autoFocus
@@ -288,9 +481,21 @@ export function MasterDataPanel({
                       {v.value}
                     </span>
                   )}
-                  <span className="label-mono w-24 text-right">
-                    {used ? `${used} people` : "unused"}
-                  </span>
+                  {used ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenId(openId === v.id ? null : v.id);
+                        setPicked([]);
+                        setMoveTo("");
+                      }}
+                      className="label-mono w-28 text-right text-brand hover:underline cursor-pointer"
+                    >
+                      {used} people {openId === v.id ? "▴" : "▾"}
+                    </button>
+                  ) : (
+                    <span className="label-mono w-28 text-right">unused</span>
+                  )}
                   {canEdit ? (
                     editing ? (
                       <>
@@ -344,11 +549,129 @@ export function MasterDataPanel({
                     )
                   ) : null}
                 </div>
+                {openId === v.id && (
+                  <PeopleList
+                    people={peopleFor(v.value)}
+                    canMove={canEdit && !fixed}
+                    picked={picked}
+                    setPicked={setPicked}
+                    moveTo={moveTo}
+                    setMoveTo={setMoveTo}
+                    options={values.filter((o) => o.id !== v.id && o.active).map((o) => o.value)}
+                    pending={move.isPending}
+                    onMove={() => move.mutate({ ids: picked, to: moveTo })}
+                  />
+                )}
+                </div>
               );
             })
           )}
         </div>
       </div>
     </Panel>
+  );
+}
+
+function PeopleList({
+  people,
+  canMove,
+  picked,
+  setPicked,
+  moveTo,
+  setMoveTo,
+  options,
+  pending,
+  onMove,
+}: {
+  people: Employee[];
+  canMove: boolean;
+  picked: string[];
+  setPicked: (v: string[]) => void;
+  moveTo: string;
+  setMoveTo: (v: string) => void;
+  options: string[];
+  pending: boolean;
+  onMove: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const shown = q.trim()
+    ? people.filter((p) =>
+        `${p.full_name} ${p.email} ${p.job_title}`.toLowerCase().includes(q.trim().toLowerCase()),
+      )
+    : people;
+  const allPicked = shown.length > 0 && shown.every((p) => picked.includes(p.id));
+  return (
+    <div className="mx-3 mb-3 rounded-md ring-1 ring-line bg-brand/5 p-3 space-y-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search these people"
+          className="flex-1 min-w-[160px] h-8 px-2.5 rounded-md ring-1 ring-line bg-panel text-[12.5px]"
+        />
+        {canMove && (
+          <>
+            <select
+              value={moveTo}
+              onChange={(e) => setMoveTo(e.target.value)}
+              className="h-8 px-2 rounded-md ring-1 ring-line bg-panel text-[12.5px] max-w-[200px]"
+            >
+              <option value="">Move ticked to…</option>
+              {options.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Move ${picked.length} people to "${moveTo}"?`)) onMove();
+              }}
+              disabled={pending || !picked.length || !moveTo}
+              className="h-8 px-3 rounded-md bg-brand text-paper text-[12px] font-medium disabled:opacity-40 cursor-pointer"
+            >
+              {pending ? "Updating…" : `Update ${picked.length || ""}`}
+            </button>
+          </>
+        )}
+      </div>
+      <div className="max-h-64 overflow-y-auto divide-y divide-line rounded bg-panel ring-1 ring-line">
+        {canMove && shown.length > 0 && (
+          <label className="flex items-center gap-2 px-2.5 py-1.5 text-[12px] text-ink-soft cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allPicked}
+              onChange={(e) =>
+                setPicked(
+                  e.target.checked
+                    ? Array.from(new Set([...picked, ...shown.map((p) => p.id)]))
+                    : picked.filter((id) => !shown.some((p) => p.id === id)),
+                )
+              }
+              className="size-4 accent-brand"
+            />
+            Select all shown ({shown.length})
+          </label>
+        )}
+        {shown.map((p) => (
+          <label key={p.id} className="flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] cursor-pointer">
+            {canMove && (
+              <input
+                type="checkbox"
+                checked={picked.includes(p.id)}
+                onChange={(e) =>
+                  setPicked(e.target.checked ? [...picked, p.id] : picked.filter((x) => x !== p.id))
+                }
+                className="size-4 accent-brand"
+              />
+            )}
+            <span className="flex-1 min-w-0 truncate">
+              <b className="font-medium">{p.full_name}</b>
+              <span className="text-ink-soft"> · {p.job_title || "—"} · {p.email}</span>
+            </span>
+            {p.status === "offboarded" && <span className="label-mono">left</span>}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

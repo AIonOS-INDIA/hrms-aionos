@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import aionosMark from "@/assets/aionos-mark.png";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -329,6 +330,7 @@ export function AppShell({
                   </span>
                 )}
                 {actions}
+                <NotificationBell />
               </div>
             </div>
           </header>

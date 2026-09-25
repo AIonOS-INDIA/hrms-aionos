@@ -405,6 +405,48 @@ export type Database = {
           },
         ]
       }
+      department_heads: {
+        Row: {
+          company_id: string
+          created_at: string
+          department: string
+          head_employee_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          department: string
+          head_employee_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          department?: string
+          head_employee_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_heads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_heads_head_employee_id_fkey"
+            columns: ["head_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_assets: {
         Row: {
           asset_tag: string
@@ -1302,6 +1344,54 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          link: string
+          read_at: string | null
+          recipient_employee_id: string
+          separation_id: string | null
+          title: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          id?: string
+          link?: string
+          read_at?: string | null
+          recipient_employee_id: string
+          separation_id?: string | null
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          link?: string
+          read_at?: string | null
+          recipient_employee_id?: string
+          separation_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_recipient_employee_id_fkey"
+            columns: ["recipient_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_separation_id_fkey"
+            columns: ["separation_id"]
+            isOneToOne: false
+            referencedRelation: "separation_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       password_reset_attempts: {
         Row: {
           created_at: string
@@ -1669,12 +1759,14 @@ export type Database = {
           hr_note: string
           hr_status: Database["public"]["Enums"]["request_status"]
           id: string
+          initiated_by: string | null
           it_assets: string
           it_decided_at: string | null
           it_note: string
           it_status: Database["public"]["Enums"]["request_status"]
           leave_encashment_amount: number
           leave_encashment_days: number
+          letters_issued_at: string | null
           manager_decided_at: string | null
           manager_note: string
           manager_status: Database["public"]["Enums"]["request_status"]
@@ -1682,7 +1774,10 @@ export type Database = {
           notice_days: number
           reason: string
           requested_last_day: string
+          resignation_form: Json
           resignation_type: string
+          revoked_at: string | null
+          separation_kind: string
           settlement_amount: number
           settlement_paid_on: string | null
           stage: Database["public"]["Enums"]["separation_stage"]
@@ -1706,12 +1801,14 @@ export type Database = {
           hr_note?: string
           hr_status?: Database["public"]["Enums"]["request_status"]
           id?: string
+          initiated_by?: string | null
           it_assets?: string
           it_decided_at?: string | null
           it_note?: string
           it_status?: Database["public"]["Enums"]["request_status"]
           leave_encashment_amount?: number
           leave_encashment_days?: number
+          letters_issued_at?: string | null
           manager_decided_at?: string | null
           manager_note?: string
           manager_status?: Database["public"]["Enums"]["request_status"]
@@ -1719,7 +1816,10 @@ export type Database = {
           notice_days?: number
           reason?: string
           requested_last_day: string
+          resignation_form?: Json
           resignation_type?: string
+          revoked_at?: string | null
+          separation_kind?: string
           settlement_amount?: number
           settlement_paid_on?: string | null
           stage?: Database["public"]["Enums"]["separation_stage"]
@@ -1743,12 +1843,14 @@ export type Database = {
           hr_note?: string
           hr_status?: Database["public"]["Enums"]["request_status"]
           id?: string
+          initiated_by?: string | null
           it_assets?: string
           it_decided_at?: string | null
           it_note?: string
           it_status?: Database["public"]["Enums"]["request_status"]
           leave_encashment_amount?: number
           leave_encashment_days?: number
+          letters_issued_at?: string | null
           manager_decided_at?: string | null
           manager_note?: string
           manager_status?: Database["public"]["Enums"]["request_status"]
@@ -1756,7 +1858,10 @@ export type Database = {
           notice_days?: number
           reason?: string
           requested_last_day?: string
+          resignation_form?: Json
           resignation_type?: string
+          revoked_at?: string | null
+          separation_kind?: string
           settlement_amount?: number
           settlement_paid_on?: string | null
           stage?: Database["public"]["Enums"]["separation_stage"]
@@ -1777,6 +1882,98 @@ export type Database = {
             columns: ["handover_to"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "separation_requests_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      separation_tasks: {
+        Row: {
+          activated_at: string | null
+          assignee_id: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          due_date: string | null
+          escalated_at: string | null
+          escalation_level: number
+          form: Json
+          id: string
+          kind: string
+          note: string
+          owner_role: string
+          separation_id: string
+          status: string
+          step_no: number
+          task_key: string
+          title: string
+        }
+        Insert: {
+          activated_at?: string | null
+          assignee_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          due_date?: string | null
+          escalated_at?: string | null
+          escalation_level?: number
+          form?: Json
+          id?: string
+          kind: string
+          note?: string
+          owner_role: string
+          separation_id: string
+          status?: string
+          step_no: number
+          task_key: string
+          title: string
+        }
+        Update: {
+          activated_at?: string | null
+          assignee_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          due_date?: string | null
+          escalated_at?: string | null
+          escalation_level?: number
+          form?: Json
+          id?: string
+          kind?: string
+          note?: string
+          owner_role?: string
+          separation_id?: string
+          status?: string
+          step_no?: number
+          task_key?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "separation_tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "separation_tasks_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "separation_tasks_separation_id_fkey"
+            columns: ["separation_id"]
+            isOneToOne: false
+            referencedRelation: "separation_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -1834,6 +2031,7 @@ export type Database = {
           project: string
           timesheet_id: string
           work_date: string
+          work_project: string
         }
         Insert: {
           hours?: number
@@ -1842,6 +2040,7 @@ export type Database = {
           project?: string
           timesheet_id: string
           work_date: string
+          work_project?: string
         }
         Update: {
           hours?: number
@@ -1850,6 +2049,7 @@ export type Database = {
           project?: string
           timesheet_id?: string
           work_date?: string
+          work_project?: string
         }
         Relationships: [
           {
@@ -2050,6 +2250,19 @@ export type Database = {
     }
     Functions: {
       claim_my_employee_record: { Args: never; Returns: string }
+      complete_separation_task: {
+        Args: {
+          _decision: string
+          _form: Json
+          _note: string
+          _task_id: string
+        }
+        Returns: undefined
+      }
+      initiate_termination: {
+        Args: { _employee_id: string; _form: Json }
+        Returns: string
+      }
       my_reporting_chain: {
         Args: never
         Returns: {
@@ -2061,6 +2274,8 @@ export type Database = {
           job_title: string
         }[]
       }
+      revoke_my_resignation: { Args: { _sep_id: string }; Returns: undefined }
+      run_separation_escalations: { Args: never; Returns: number }
       update_my_contact: {
         Args: { _home_address: string; _phone: string }
         Returns: string
@@ -2074,6 +2289,9 @@ export type Database = {
         | "finance_expense"
         | "finance_payroll"
         | "it_asset"
+        | "hr_head"
+        | "admin_facilities"
+        | "legal"
       asset_category:
         | "hardware"
         | "accessory"
@@ -2250,6 +2468,9 @@ export const Constants = {
         "finance_expense",
         "finance_payroll",
         "it_asset",
+        "hr_head",
+        "admin_facilities",
+        "legal",
       ],
       asset_category: [
         "hardware",

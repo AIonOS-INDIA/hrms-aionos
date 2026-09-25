@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { queueApprovalCards } from "@/lib/actionable-cards.functions";
 import {
   AppShell,
   EntityTag,
@@ -63,6 +65,7 @@ function ExpensesBody() {
   const { data: claims = [] } = useExpenseClaims();
   const { data: receipts = [] } = useExpenseReceipts();
   const queryClient = useQueryClient();
+  const queueCards = useServerFn(queueApprovalCards);
 
   const canReview = !!me?.isMaster || !!me?.hrCompanyId || !!me?.isExpenseApprover;
   const reviewCompanyIds = me?.isMaster
@@ -146,9 +149,11 @@ function ExpensesBody() {
         .update({ status: "submitted", submitted_at: new Date().toISOString(), total_amount: total })
         .eq("id", claim.id);
       if (error) throw error;
+      return claim.id;
     },
-    onSuccess: () => {
+    onSuccess: (claimId) => {
       toast.success("Sent to finance for review");
+      void queueCards({ data: { kind: "expense", id: claimId } }).catch(() => undefined);
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),

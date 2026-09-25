@@ -18,6 +18,8 @@ export type ChannelsView = {
   whatsappReady: boolean;
   whatsappNumber: string;
   teamsReady: boolean;
+  outlookReady: boolean;
+  outlookConnected: boolean;
   channels: ChannelState[];
 };
 
@@ -71,11 +73,17 @@ export const getMyChannels = createServerFn({ method: "GET" })
       .select("*")
       .eq("employee_id", emp.id);
     const rows = (data ?? []) as any[];
+    const { data: connections } = await supabaseAdmin
+      .from("app_user_connections")
+      .select("connector_id")
+      .eq("user_id", (context as any).userId);
     return {
       phone: emp.phone ?? "",
       whatsappReady: whatsappReady(),
       whatsappNumber: whatsappConfig().businessNumber,
       teamsReady: Boolean(process.env["MICROSOFT_TEAMS_APP_USER_CONNECTOR_CLIENT_API_KEY"]),
+      outlookReady: Boolean(process.env["MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY"]),
+      outlookConnected: (connections ?? []).some((row: any) => row.connector_id === "microsoft_outlook"),
       channels: [
         toState("whatsapp", rows.find((r) => r.channel === "whatsapp"), maskHandle),
         toState("microsoft_teams", rows.find((r) => r.channel === "microsoft_teams"), (v) => v),

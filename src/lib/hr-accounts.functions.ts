@@ -500,7 +500,7 @@ export const resetEmployeePassword = createServerFn({ method: "POST" })
     return { email: emp.email, createdLogin: true };
   });
 
-const financeRole = z.enum(["finance_expense", "finance_payroll", "it_asset"]);
+const financeRole = z.enum(["finance_expense", "finance_payroll", "it_asset", "hr_head", "admin_facilities", "legal"]);
 
 /** Finance duties (expense / payroll approval) a person currently holds, by entity. */
 export const getEmployeeFinanceDuties = createServerFn({ method: "POST" })
@@ -522,7 +522,7 @@ export const getEmployeeFinanceDuties = createServerFn({ method: "POST" })
       .from("user_roles")
       .select("role, company_id")
       .eq("user_id", emp.user_id)
-      .in("role", ["finance_expense", "finance_payroll", "it_asset"]);
+      .in("role", ["finance_expense", "finance_payroll", "it_asset", "hr_head", "admin_facilities", "legal"]);
     if (rolesError) throw new Error(rolesError.message);
 
     const pick = (role: string) =>
@@ -535,6 +535,9 @@ export const getEmployeeFinanceDuties = createServerFn({ method: "POST" })
       expenseCompanyIds: pick("finance_expense"),
       payrollCompanyIds: pick("finance_payroll"),
       assetCompanyIds: pick("it_asset"),
+      hrHeadCompanyIds: pick("hr_head"),
+      adminCompanyIds: pick("admin_facilities"),
+      legalCompanyIds: pick("legal"),
     };
   });
 

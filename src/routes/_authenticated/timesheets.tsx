@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { listWorkProjects, projectLabel } from "@/lib/work-projects.functions";
+import { ProjectPicker } from "@/components/ProjectPicker";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
@@ -18,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { queueApprovalCards } from "@/lib/actionable-cards.functions";
 import { AppShell, EntityTag, Panel, StatCard, StatusPill, useScope } from "@/components/AppShell";
 import {
   fmtDate,
@@ -72,7 +76,14 @@ const TASKS = [
   "Other",
 ];
 
-type TaskRow = { key: string; date: string; task: string; hours: string; notes: string };
+type TaskRow = {
+  key: string;
+  date: string;
+  project: string;
+  task: string;
+  hours: string;
+  notes: string;
+};
 
 let keyCounter = 0;
 function newKey() {
@@ -119,8 +130,19 @@ function TimesheetsBody() {
   const { data: employees = [] } = useEmployees();
   const { data: sheets = [] } = useTimesheets();
   const queryClient = useQueryClient();
+  const queueCards = useServerFn(queueApprovalCards);
   const isHr = !!me?.isMaster || !!me?.hrCompanyId;
   const myId = me?.employee?.id;
+  const fetchProjects = useServerFn(listWorkProjects);
+  const { data: projectData, isLoading: projectsLoading } = useQuery({
+    queryKey: ["work_projects"],
+    queryFn: () => fetchProjects(),
+    staleTime: 5 * 60_000,
+  });
+  const projectOptions = useMemo(
+    () => (projectData?.projects ?? []).map(projectLabel),
+    [projectData],
+  );
 
   const [tab, setTab] = useState<"mine" | "approvals">("mine");
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -157,6 +179,7 @@ function TimesheetsBody() {
       entries.map((e) => ({
         key: e.id,
         date: e.work_date,
+        project: (e as { work_project?: string }).work_project ?? "",
         task: e.project || TASKS[0]!,
         hours: String(e.hours),
         notes: e.notes ?? "",
@@ -175,8 +198,9 @@ function TimesheetsBody() {
     setRows(next);
     setDirty(true);
   };
+  const lastProject = lines.length ? lines[lines.length - 1]!.project : "";
   const addLine = (date: string, task = TASKS[0]!, hours = "", notes = "") =>
-    apply([...lines, { key: newKey(), date, task, hours, notes }]);
+    apply([...lines, { key: newKey(), date, project: lastProject, task, hours, notes }]);
   const patchLine = (key: string, patch: Partial<TaskRow>) =>
     apply(lines.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const removeLine = (key: string) => apply(lines.filter((r) => r.key !== key));
@@ -184,6 +208,11 @@ function TimesheetsBody() {
   const save = useMutation({
     mutationFn: async (submit: boolean) => {
       if (!myId) throw new Error("Your employee record is not linked yet");
+      if (submit) {
+        const missing = lines.filter((r) => (parseFloat(r.hours) || 0) > 0 && !r.project.trim());
+        if (missing.length)
+          throw new Error(`Pick a Project on ${missing.length} line${missing.length > 1 ? "s" : ""} before sending`);
+      }
       let sheetId = mySheet?.id;
       const base = {
         total_hours: totalHours,
@@ -223,6 +252,7 @@ function TimesheetsBody() {
           work_date: r.date,
           hours: parseFloat(r.hours) || 0,
           project: r.task || "General work",
+          work_project: r.project.trim(),
           notes: r.notes ?? "",
         }));
       await supabase.from("timesheet_entries").delete().eq("timesheet_id", sheetId);
@@ -230,10 +260,12 @@ function TimesheetsBody() {
         const { error } = await supabase.from("timesheet_entries").insert(payload);
         if (error) throw error;
       }
+      return submit ? sheetId : null;
     },
-    onSuccess: (_d, submit) => {
+    onSuccess: (sheetId, submit) => {
       setDirty(false);
       if (submit) toast.success("Week sent for approval");
+      if (sheetId) void queueCards({ data: { kind: "timesheet", id: sheetId } }).catch(() => undefined);
       queryClient.invalidateQueries({ queryKey: ["timesheets"] });
       queryClient.invalidateQueries({ queryKey: ["timesheet_entries"] });
     },
@@ -258,7 +290,7 @@ function TimesheetsBody() {
     const next = [...kept];
     dayDates.slice(0, 5).forEach((d) => {
       if (!kept.some((r) => r.date === d)) {
-        next.push({ key: newKey(), date: d, task: TASKS[0]!, hours: "8", notes: "" });
+        next.push({ key: newKey(), date: d, project: lastProject, task: TASKS[0]!, hours: "8", notes: "" });
       }
     });
     apply(next);
@@ -274,11 +306,12 @@ function TimesheetsBody() {
     }
     const { data } = await supabase
       .from("timesheet_entries")
-      .select("work_date,hours,project,notes")
+      .select("work_date,hours,project,work_project,notes")
       .eq("timesheet_id", prev.id);
     const next = (data ?? []).map((e) => ({
       key: newKey(),
       date: shiftWeek(e.work_date as string, 7),
+      project: (e.work_project as string) ?? "",
       task: (e.project as string) || TASKS[0]!,
       hours: String(e.hours),
       notes: (e.notes as string) ?? "",
@@ -294,6 +327,7 @@ function TimesheetsBody() {
   const downloadTemplate = () => {
     const sample = dayDates.slice(0, 5).map((d) => ({
       Date: d,
+      Project: projectOptions[0] ?? "",
       Task: TASKS[0],
       Hours: 8,
       Notes: "",
@@ -325,6 +359,7 @@ function TimesheetsBody() {
         next.push({
           key: newKey(),
           date,
+          project: String(get("project") ?? "").trim(),
           task: String(get("task") ?? "").trim() || TASKS[0]!,
           hours: String(hours),
           notes: String(get("notes") ?? "").trim(),
@@ -591,13 +626,25 @@ function TimesheetsBody() {
                           </div>
                           <div className="p-2 space-y-2">
                             {dayLines.map((r) => (
-                              <div key={r.key} className="flex flex-wrap items-center gap-2">
+                              <div
+                                key={r.key}
+                                className="grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] gap-2 sm:flex sm:flex-wrap sm:items-center"
+                              >
+                                <ProjectPicker
+                                  disabled={locked}
+                                  value={r.project}
+                                  options={projectOptions}
+                                  loading={projectsLoading}
+                                  onChange={(v) => patchLine(r.key, { project: v })}
+                                  label={`Project for ${d}`}
+                                  className="col-span-3 w-full sm:w-72"
+                                />
                                 <select
                                   disabled={locked}
                                   value={TASKS.includes(r.task) ? r.task : "Other"}
                                   onChange={(e) => patchLine(r.key, { task: e.target.value })}
                                   aria-label={`Task for ${d}`}
-                                  className="h-9 px-2 rounded-lg bg-panel ring-1 ring-line text-[13px] outline-none focus:ring-ink disabled:opacity-60 min-w-44"
+                                  className="h-9 px-2 rounded-lg bg-panel ring-1 ring-line text-[13px] outline-none focus:ring-ink disabled:opacity-60 min-w-0 w-full sm:w-44"
                                 >
                                   {TASKS.map((t) => (
                                     <option key={t} value={t}>
@@ -612,25 +659,27 @@ function TimesheetsBody() {
                                   onChange={(e) => patchLine(r.key, { hours: e.target.value })}
                                   placeholder="0"
                                   aria-label={`Hours for ${d}`}
-                                  className="h-9 w-20 px-2 rounded-lg bg-panel ring-1 ring-line text-[14px] font-mono text-center outline-none focus:ring-ink disabled:opacity-60"
+                                  className="h-9 w-full sm:w-20 px-2 rounded-lg bg-panel ring-1 ring-line text-[14px] font-mono text-center outline-none focus:ring-ink disabled:opacity-60"
                                 />
+                                {!locked ? (
+                                  <button
+                                    onClick={() => removeLine(r.key)}
+                                    aria-label="Remove task"
+                                    className="size-9 grid place-items-center rounded-lg ring-1 ring-line cursor-pointer hover:bg-ink/5 sm:order-last"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                ) : (
+                                  <span className="sm:hidden" />
+                                )}
                                 <input
                                   disabled={locked}
                                   value={r.notes}
                                   onChange={(e) => patchLine(r.key, { notes: e.target.value })}
                                   placeholder="What did you work on?"
                                   aria-label={`Notes for ${d}`}
-                                  className="h-9 flex-1 min-w-40 px-2.5 rounded-lg bg-panel ring-1 ring-line text-[13px] outline-none focus:ring-ink disabled:opacity-60"
+                                  className="col-span-3 h-9 w-full sm:w-auto sm:flex-1 sm:min-w-40 px-2.5 rounded-lg bg-panel ring-1 ring-line text-[13px] outline-none focus:ring-ink disabled:opacity-60"
                                 />
-                                {!locked && (
-                                  <button
-                                    onClick={() => removeLine(r.key)}
-                                    aria-label="Remove task"
-                                    className="size-9 grid place-items-center rounded-lg ring-1 ring-line cursor-pointer hover:bg-ink/5"
-                                  >
-                                    <Trash2 className="size-3.5" />
-                                  </button>
-                                )}
                               </div>
                             ))}
                             {!dayLines.length && (

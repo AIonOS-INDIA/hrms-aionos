@@ -1,0 +1,1 @@
+ALTER TABLE public.timesheet_entries ADD COLUMN IF NOT EXISTS work_project text NOT NULL DEFAULT '';
