@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as RequestAccessRouteImport } from './routes/request-access'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 import { Route as AuthenticatedBenefitsRouteImport } from './routes/_authenticated/benefits'
 import { Route as AuthenticatedComplianceRouteImport } from './routes/_authenticated/compliance'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -58,6 +59,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
+  id: '/attendance',
+  path: '/attendance',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedBenefitsRoute = AuthenticatedBenefitsRouteImport.update({
   id: '/benefits',
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/request-access': typeof RequestAccessRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/attendance': typeof AuthenticatedAttendanceRoute
   '/benefits': typeof AuthenticatedBenefitsRoute
   '/compliance': typeof AuthenticatedComplianceRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -229,6 +236,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/request-access': typeof RequestAccessRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/attendance': typeof AuthenticatedAttendanceRoute
   '/benefits': typeof AuthenticatedBenefitsRoute
   '/compliance': typeof AuthenticatedComplianceRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -262,6 +270,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/request-access': typeof RequestAccessRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/benefits': typeof AuthenticatedBenefitsRoute
   '/_authenticated/compliance': typeof AuthenticatedComplianceRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/'
     | '/request-access'
     | '/reset-password'
+    | '/attendance'
     | '/benefits'
     | '/compliance'
     | '/dashboard'
@@ -326,6 +336,7 @@ export interface FileRouteTypes {
     | '/'
     | '/request-access'
     | '/reset-password'
+    | '/attendance'
     | '/benefits'
     | '/compliance'
     | '/dashboard'
@@ -358,6 +369,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/request-access'
     | '/reset-password'
+    | '/_authenticated/attendance'
     | '/_authenticated/benefits'
     | '/_authenticated/compliance'
     | '/_authenticated/dashboard'
@@ -426,6 +438,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/attendance': {
+      id: '/_authenticated/attendance'
+      path: '/attendance'
+      fullPath: '/attendance'
+      preLoaderRoute: typeof AuthenticatedAttendanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/benefits': {
       id: '/_authenticated/benefits'
@@ -613,6 +632,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedBenefitsRoute: typeof AuthenticatedBenefitsRoute
   AuthenticatedComplianceRoute: typeof AuthenticatedComplianceRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -638,6 +658,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedBenefitsRoute: AuthenticatedBenefitsRoute,
   AuthenticatedComplianceRoute: AuthenticatedComplianceRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,

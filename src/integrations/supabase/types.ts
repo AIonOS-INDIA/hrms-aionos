@@ -41,6 +41,304 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_days: {
+        Row: {
+          created_at: string
+          employee_id: string
+          face_score: number | null
+          id: string
+          in_at: string | null
+          in_lat: number | null
+          in_lng: number | null
+          is_late: boolean
+          is_night: boolean
+          is_off_day: boolean
+          late_minutes: number
+          location_id: string | null
+          marked_by: string | null
+          note: string
+          ot_minutes: number
+          out_at: string | null
+          selfie_path: string
+          shift_id: string | null
+          source: string
+          status: string
+          updated_at: string
+          work_date: string
+          worked_minutes: number
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          face_score?: number | null
+          id?: string
+          in_at?: string | null
+          in_lat?: number | null
+          in_lng?: number | null
+          is_late?: boolean
+          is_night?: boolean
+          is_off_day?: boolean
+          late_minutes?: number
+          location_id?: string | null
+          marked_by?: string | null
+          note?: string
+          ot_minutes?: number
+          out_at?: string | null
+          selfie_path?: string
+          shift_id?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          work_date: string
+          worked_minutes?: number
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          face_score?: number | null
+          id?: string
+          in_at?: string | null
+          in_lat?: number | null
+          in_lng?: number | null
+          is_late?: boolean
+          is_night?: boolean
+          is_off_day?: boolean
+          late_minutes?: number
+          location_id?: string | null
+          marked_by?: string | null
+          note?: string
+          ot_minutes?: number
+          out_at?: string | null
+          selfie_path?: string
+          shift_id?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          work_date?: string
+          worked_minutes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_days_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_days_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "office_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_days_marked_by_fkey"
+            columns: ["marked_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_days_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_flags: {
+        Row: {
+          created_at: string
+          detail: string
+          employee_id: string
+          flag: string
+          id: string
+          period: string
+          resolved: boolean
+        }
+        Insert: {
+          created_at?: string
+          detail?: string
+          employee_id: string
+          flag: string
+          id?: string
+          period: string
+          resolved?: boolean
+        }
+        Update: {
+          created_at?: string
+          detail?: string
+          employee_id?: string
+          flag?: string
+          id?: string
+          period?: string
+          resolved?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_flags_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_requests: {
+        Row: {
+          compensation: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string
+          employee_id: string
+          id: string
+          kind: string
+          ot_minutes: number
+          ot_rate: number
+          raised_by: string | null
+          reason: string
+          requested_in: string | null
+          requested_out: string | null
+          status: Database["public"]["Enums"]["request_status"]
+          work_date: string
+        }
+        Insert: {
+          compensation?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string
+          employee_id: string
+          id?: string
+          kind: string
+          ot_minutes?: number
+          ot_rate?: number
+          raised_by?: string | null
+          reason?: string
+          requested_in?: string | null
+          requested_out?: string | null
+          status?: Database["public"]["Enums"]["request_status"]
+          work_date: string
+        }
+        Update: {
+          compensation?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string
+          employee_id?: string
+          id?: string
+          kind?: string
+          ot_minutes?: number
+          ot_rate?: number
+          raised_by?: string | null
+          reason?: string
+          requested_in?: string | null
+          requested_out?: string | null
+          status?: Database["public"]["Enums"]["request_status"]
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_requests_raised_by_fkey"
+            columns: ["raised_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_settings: {
+        Row: {
+          absconding_days: number
+          buffer_minutes: number
+          comp_off_expiry_days: number
+          company_id: string
+          face_required: boolean
+          geofence_required: boolean
+          grace_minutes: number
+          late_deduct_days: number
+          late_limit: number
+          night_end: string
+          night_start: string
+          ot_holiday_rate: number
+          ot_min_minutes: number
+          ot_weekday_rate: number
+          prorata_min_days: number
+          proxy_days: number
+          regularize_hours: number
+          updated_at: string
+          weekly_hours_cap: number
+        }
+        Insert: {
+          absconding_days?: number
+          buffer_minutes?: number
+          comp_off_expiry_days?: number
+          company_id: string
+          face_required?: boolean
+          geofence_required?: boolean
+          grace_minutes?: number
+          late_deduct_days?: number
+          late_limit?: number
+          night_end?: string
+          night_start?: string
+          ot_holiday_rate?: number
+          ot_min_minutes?: number
+          ot_weekday_rate?: number
+          prorata_min_days?: number
+          proxy_days?: number
+          regularize_hours?: number
+          updated_at?: string
+          weekly_hours_cap?: number
+        }
+        Update: {
+          absconding_days?: number
+          buffer_minutes?: number
+          comp_off_expiry_days?: number
+          company_id?: string
+          face_required?: boolean
+          geofence_required?: boolean
+          grace_minutes?: number
+          late_deduct_days?: number
+          late_limit?: number
+          night_end?: string
+          night_start?: string
+          ot_holiday_rate?: number
+          ot_min_minutes?: number
+          ot_weekday_rate?: number
+          prorata_min_days?: number
+          proxy_days?: number
+          regularize_hours?: number
+          updated_at?: string
+          weekly_hours_cap?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       benefit_enrollments: {
         Row: {
           created_at: string
@@ -311,6 +609,54 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comp_offs: {
+        Row: {
+          created_at: string
+          earned_on: string
+          employee_id: string
+          expires_on: string
+          id: string
+          request_id: string | null
+          status: string
+          used_on: string | null
+        }
+        Insert: {
+          created_at?: string
+          earned_on: string
+          employee_id: string
+          expires_on: string
+          id?: string
+          request_id?: string | null
+          status?: string
+          used_on?: string | null
+        }
+        Update: {
+          created_at?: string
+          earned_on?: string
+          employee_id?: string
+          expires_on?: string
+          id?: string
+          request_id?: string | null
+          status?: string
+          used_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comp_offs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comp_offs_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -670,6 +1016,32 @@ export type Database = {
             foreignKeyName: "employee_checklists_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_face_profiles: {
+        Row: {
+          employee_id: string
+          enrolled_at: string
+          photo_path: string
+        }
+        Insert: {
+          employee_id: string
+          enrolled_at?: string
+          photo_path: string
+        }
+        Update: {
+          employee_id?: string
+          enrolled_at?: string
+          photo_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_face_profiles_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
             referencedRelation: "employees"
             referencedColumns: ["id"]
           },
@@ -1392,6 +1764,50 @@ export type Database = {
           },
         ]
       }
+      office_locations: {
+        Row: {
+          active: boolean
+          city: string
+          company_id: string
+          created_at: string
+          id: string
+          lat: number
+          lng: number
+          name: string
+          radius_m: number
+        }
+        Insert: {
+          active?: boolean
+          city?: string
+          company_id: string
+          created_at?: string
+          id?: string
+          lat: number
+          lng: number
+          name: string
+          radius_m?: number
+        }
+        Update: {
+          active?: boolean
+          city?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string
+          radius_m?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       password_reset_attempts: {
         Row: {
           created_at: string
@@ -1689,6 +2105,58 @@ export type Database = {
         }
         Relationships: []
       }
+      rosters: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          set_by: string | null
+          shift_id: string | null
+          weekly_off: boolean
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          set_by?: string | null
+          shift_id?: string | null
+          weekly_off?: boolean
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          set_by?: string | null
+          shift_id?: string | null
+          weekly_off?: boolean
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rosters_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rosters_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rosters_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       salary_structures: {
         Row: {
           annual_ctc: number
@@ -1978,6 +2446,50 @@ export type Database = {
           },
         ]
       }
+      shifts: {
+        Row: {
+          active: boolean
+          company_id: string
+          created_at: string
+          end_time: string
+          hours: number
+          id: string
+          kind: string
+          name: string
+          start_time: string
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          created_at?: string
+          end_time?: string
+          hours?: number
+          id?: string
+          kind?: string
+          name: string
+          start_time?: string
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          end_time?: string
+          hours?: number
+          id?: string
+          kind?: string
+          name?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shifts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subsidiary_requests: {
         Row: {
           company_code: string
@@ -2259,6 +2771,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      decide_attendance_request: {
+        Args: {
+          _compensation: string
+          _decision: string
+          _id: string
+          _note: string
+        }
+        Returns: undefined
+      }
       initiate_termination: {
         Args: { _employee_id: string; _form: Json }
         Returns: string
@@ -2274,8 +2795,20 @@ export type Database = {
           job_title: string
         }[]
       }
+      proxy_mark_attendance: {
+        Args: {
+          _date: string
+          _employee_id: string
+          _in: string
+          _note: string
+          _out: string
+        }
+        Returns: undefined
+      }
       revoke_my_resignation: { Args: { _sep_id: string }; Returns: undefined }
+      run_attendance_checks: { Args: never; Returns: number }
       run_separation_escalations: { Args: never; Returns: number }
+      set_roster: { Args: { _rows: Json }; Returns: number }
       update_my_contact: {
         Args: { _home_address: string; _phone: string }
         Returns: string
