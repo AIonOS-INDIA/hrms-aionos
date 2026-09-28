@@ -195,7 +195,7 @@ function OnboardingBody() {
   const { data: templateItems = [] } = useChecklistTemplateItems();
   const queryClient = useQueryClient();
 
-  const isHr = !!me?.isMaster || !!me?.hrCompanyId;
+  const isHr = !!me?.isMaster || (me?.hrCompanyIds?.length ?? 0) > 0;
   const myId = me?.employee?.id;
 
   const scoped = useMemo(
