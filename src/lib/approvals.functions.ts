@@ -10,6 +10,45 @@ export type ChatApproval = {
   detail: string;
 };
 
+export const decideLeaveRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        decision: z.enum(["approved", "rejected"]),
+        decisionNote: z.string().max(1000).default(""),
+      })
+      .parse(data),
+  )
+  .handler(async ({ context, data }): Promise<{ message: string }> => {
+    const decisionNote = data.decisionNote.trim();
+    if (data.decision === "rejected" && !decisionNote) {
+      throw new Error("A reason is required when rejecting a leave request.");
+    }
+    const { data: updated, error } = await (context as any).supabase
+      .from("leave_requests")
+      .update({
+        status: data.decision,
+        decision_note: decisionNote || null,
+        decided_at: new Date().toISOString(),
+      })
+      .eq("id", data.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!updated) throw new Error("This leave request is no longer pending or you cannot decide it.");
+
+    try {
+      const { sendLeaveDecisionEmail } = await import("@/lib/actionable-cards.server");
+      await sendLeaveDecisionEmail(data.id, data.decision, decisionNote);
+    } catch (emailError) {
+      console.error("Leave decision email failed", emailError);
+    }
+    return { message: `Leave request ${data.decision}.` };
+  });
+
 /**
  * Everything waiting on the signed-in HR / finance approver, ready to be
  * actioned straight from the assistant chat. RLS keeps this to their entities.

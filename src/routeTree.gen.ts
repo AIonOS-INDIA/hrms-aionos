@@ -37,7 +37,6 @@ import { Route as AuthenticatedSeparationRouteImport } from './routes/_authentic
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
 import { Route as AuthenticatedTimesheetsRouteImport } from './routes/_authenticated/timesheets'
 import { Route as ApiActionableApprovalRouteImport } from './routes/api/actionable/approval'
-import { Route as OauthOutlookReturnRouteImport } from './routes/oauth/outlook/return'
 import { Route as OauthTeamsReturnRouteImport } from './routes/oauth/teams/return'
 import { Route as ApiPublicWhatsappWebhookRouteImport } from './routes/api/public/whatsapp/webhook'
 
@@ -183,11 +182,6 @@ const ApiActionableApprovalRoute = ApiActionableApprovalRouteImport.update({
   path: '/api/actionable/approval',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OauthOutlookReturnRoute = OauthOutlookReturnRouteImport.update({
-  id: '/oauth/outlook/return',
-  path: '/oauth/outlook/return',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OauthTeamsReturnRoute = OauthTeamsReturnRouteImport.update({
   id: '/oauth/teams/return',
   path: '/oauth/teams/return',
@@ -228,7 +222,6 @@ export interface FileRoutesByFullPath {
   '/team': typeof AuthenticatedTeamRoute
   '/timesheets': typeof AuthenticatedTimesheetsRoute
   '/api/actionable/approval': typeof ApiActionableApprovalRoute
-  '/oauth/outlook/return': typeof OauthOutlookReturnRoute
   '/oauth/teams/return': typeof OauthTeamsReturnRoute
   '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
@@ -260,7 +253,6 @@ export interface FileRoutesByTo {
   '/team': typeof AuthenticatedTeamRoute
   '/timesheets': typeof AuthenticatedTimesheetsRoute
   '/api/actionable/approval': typeof ApiActionableApprovalRoute
-  '/oauth/outlook/return': typeof OauthOutlookReturnRoute
   '/oauth/teams/return': typeof OauthTeamsReturnRoute
   '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
@@ -294,7 +286,6 @@ export interface FileRoutesById {
   '/_authenticated/team': typeof AuthenticatedTeamRoute
   '/_authenticated/timesheets': typeof AuthenticatedTimesheetsRoute
   '/api/actionable/approval': typeof ApiActionableApprovalRoute
-  '/oauth/outlook/return': typeof OauthOutlookReturnRoute
   '/oauth/teams/return': typeof OauthTeamsReturnRoute
   '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
@@ -328,7 +319,6 @@ export interface FileRouteTypes {
     | '/team'
     | '/timesheets'
     | '/api/actionable/approval'
-    | '/oauth/outlook/return'
     | '/oauth/teams/return'
     | '/api/public/whatsapp/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -360,7 +350,6 @@ export interface FileRouteTypes {
     | '/team'
     | '/timesheets'
     | '/api/actionable/approval'
-    | '/oauth/outlook/return'
     | '/oauth/teams/return'
     | '/api/public/whatsapp/webhook'
   id:
@@ -393,7 +382,6 @@ export interface FileRouteTypes {
     | '/_authenticated/team'
     | '/_authenticated/timesheets'
     | '/api/actionable/approval'
-    | '/oauth/outlook/return'
     | '/oauth/teams/return'
     | '/api/public/whatsapp/webhook'
   fileRoutesById: FileRoutesById
@@ -404,7 +392,6 @@ export interface RootRouteChildren {
   RequestAccessRoute: typeof RequestAccessRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiActionableApprovalRoute: typeof ApiActionableApprovalRoute
-  OauthOutlookReturnRoute: typeof OauthOutlookReturnRoute
   OauthTeamsReturnRoute: typeof OauthTeamsReturnRoute
   ApiPublicWhatsappWebhookRoute: typeof ApiPublicWhatsappWebhookRoute
 }
@@ -607,13 +594,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiActionableApprovalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/oauth/outlook/return': {
-      id: '/oauth/outlook/return'
-      path: '/oauth/outlook/return'
-      fullPath: '/oauth/outlook/return'
-      preLoaderRoute: typeof OauthOutlookReturnRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/oauth/teams/return': {
       id: '/oauth/teams/return'
       path: '/oauth/teams/return'
@@ -692,7 +672,6 @@ const rootRouteChildren: RootRouteChildren = {
   RequestAccessRoute: RequestAccessRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiActionableApprovalRoute: ApiActionableApprovalRoute,
-  OauthOutlookReturnRoute: OauthOutlookReturnRoute,
   OauthTeamsReturnRoute: OauthTeamsReturnRoute,
   ApiPublicWhatsappWebhookRoute: ApiPublicWhatsappWebhookRoute,
 }

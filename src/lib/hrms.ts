@@ -103,6 +103,7 @@ export type LeaveRequest = {
   end_date: string;
   days: number;
   reason: string;
+  decision_note: string | null;
   status: "pending" | "approved" | "rejected" | "cancelled";
   created_at: string;
 };

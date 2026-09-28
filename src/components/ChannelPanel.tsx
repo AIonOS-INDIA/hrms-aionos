@@ -15,7 +15,6 @@ import type { ChatTurn, WhatsappInvite } from "@/lib/channels.functions";
 import { decideChatApproval, getChatApprovals } from "@/lib/approvals.functions";
 import type { ChatApproval } from "@/lib/approvals.functions";
 import { completeTeamsConnection, startTeamsConnect, syncTeamsChat } from "@/lib/teams.functions";
-import { completeOutlookConnection, startOutlookConnect } from "@/lib/outlook.functions";
 
 /** Approve or send back leave and timesheets without leaving the chat. */
 function ApprovalStrip() {
@@ -253,8 +252,6 @@ export function ChannelPanel() {
   const disconnect = useServerFn(disconnectChannel);
   const startTeams = useServerFn(startTeamsConnect);
   const completeTeams = useServerFn(completeTeamsConnection);
-  const startOutlook = useServerFn(startOutlookConnect);
-  const completeOutlook = useServerFn(completeOutlookConnection);
   const syncTeams = useServerFn(syncTeamsChat);
   const [invite, setInvite] = useState<WhatsappInvite | null>(null);
 
@@ -305,28 +302,6 @@ export function ChannelPanel() {
     },
     onSuccess: () => {
       toast.success("Microsoft Teams connected");
-      invalidate();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const connectOutlook = useMutation({
-    mutationFn: async () => {
-      const popup = window.open("", "outlook-oauth", "width=600,height=720");
-      if (!popup) throw new Error("Allow pop-ups for this site, then try again.");
-      try {
-        const { authorizationUrl } = (await startOutlook({})) as { authorizationUrl: string };
-        const waiting = waitForConnectorCode(popup, "microsoft_outlook");
-        popup.location.href = authorizationUrl;
-        const code = await waiting;
-        if (code) await completeOutlook({ data: { code } });
-      } catch (error) {
-        popup.close();
-        throw error;
-      }
-    },
-    onSuccess: () => {
-      toast.success("Outlook connected");
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -476,27 +451,20 @@ export function ChannelPanel() {
         <div className="rounded-xl ring-1 ring-line p-3 space-y-3">
           <div className="flex items-center gap-2">
             <Send className="size-4 text-brand" />
-            <p className="text-[13px] font-semibold">Outlook approval cards</p>
-            {data?.outlookConnected && (
+            <p className="text-[13px] font-semibold">Outlook approval emails</p>
+            {data?.outlookReady && (
               <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-brand-deep">
-                <CheckCircle2 className="size-3.5" /> Connected
+                <CheckCircle2 className="size-3.5" /> Ready
               </span>
             )}
           </div>
-          {data?.outlookConnected ? (
+          {data?.outlookReady ? (
             <p className="text-[12.5px] text-ink-soft">
-              Approval cards will be sent to this mailbox when leave, timesheets, or expenses need your decision.
+              Approval emails are sent to the reporting manager with a secure link to review requests in the portal.
+              {data.outlookActionableReady ? " Interactive Outlook cards are enabled." : " Interactive cards will be enabled when the Outlook originator is configured."}
             </p>
-          ) : data && !data.outlookReady ? (
-            <p className="text-[12.5px] text-ink-soft">Outlook cards are not switched on for this app yet.</p>
           ) : (
-            <button
-              disabled={connectOutlook.isPending}
-              onClick={() => connectOutlook.mutate()}
-              className="h-9 px-4 rounded-md bg-brand text-paper text-[13px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-50"
-            >
-              {connectOutlook.isPending ? "Opening Microsoft…" : "Connect Outlook"}
-            </button>
+            <p className="text-[12.5px] text-ink-soft">Outlook cards are not configured for this app yet.</p>
           )}
         </div>
       </div>

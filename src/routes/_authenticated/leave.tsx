@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell, FilterNote, EntityTag, Panel, StatCard, StatusPill, useScope } from "@/components/AppShell";
 import { Input, Select } from "@/routes/_authenticated/employees";
+import { decideLeaveRequest } from "@/lib/approvals.functions";
 import {
   daysBetween,
   fmtDate,
@@ -15,7 +16,7 @@ import {
   useLeaveTypes,
   useMe,
 } from "@/lib/hrms";
-import { queueApprovalCards } from "@/lib/actionable-cards.functions";
+import { queueApprovalCards, sendOutlookApprovalTestEmail } from "@/lib/actionable-cards.functions";
 
 export const Route = createFileRoute("/_authenticated/leave")({
   head: () => ({
@@ -32,6 +33,13 @@ export const Route = createFileRoute("/_authenticated/leave")({
   }),
   component: LeavePage,
 });
+
+async function supabaseAuthHeaders(): Promise<HeadersInit> {
+  const { data, error } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (error || !token) throw new Error("Your session has expired. Sign in again and retry.");
+  return { Authorization: `Bearer ${token}` };
+}
 
 function LeavePage() {
   return (
@@ -50,9 +58,12 @@ function LeaveBody() {
   const { data: balances = [] } = useLeaveBalances(me?.employee?.id);
   const queryClient = useQueryClient();
   const queueCards = useServerFn(queueApprovalCards);
+  const sendApprovalTestEmail = useServerFn(sendOutlookApprovalTestEmail);
+  const decideLeave = useServerFn(decideLeaveRequest);
 
   const isHr = !!me?.isMaster || !!me?.hrCompanyId;
   const myId = me?.employee?.id;
+  const canReviewTeam = isHr || employees.some((employee) => employee.manager_id === myId);
 
   const [tile, setTile] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -95,22 +106,28 @@ function LeaveBody() {
       if (error) throw error;
       return data.id;
     },
-    onSuccess: (id) => {
+    onSuccess: async (id) => {
       toast.success("Leave request submitted");
-      void queueCards({ data: { kind: "leave", id } }).catch(() => undefined);
+      try {
+        await queueCards({ data: { kind: "leave", id }, headers: await supabaseAuthHeaders() });
+      } catch {
+        // Request submission remains successful if notification delivery fails.
+      }
       setForm({ ...form, reason: "" });
       queryClient.invalidateQueries({ queryKey: ["leave_requests"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const sendTestEmail = useMutation({
+    mutationFn: async () => sendApprovalTestEmail({ headers: await supabaseAuthHeaders() }),
+    onSuccess: () => toast.success("Test approval email sent to your reporting manager."),
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const decide = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" }) => {
-      const { error } = await supabase
-        .from("leave_requests")
-        .update({ status, decided_at: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
+    mutationFn: async ({ id, status, decisionNote }: { id: string; status: "approved" | "rejected"; decisionNote: string }) => {
+      await decideLeave({ data: { id, decision: status, decisionNote }, headers: await supabaseAuthHeaders() });
     },
     onSuccess: () => {
       toast.success("Decision recorded");
@@ -158,8 +175,8 @@ function LeaveBody() {
           );
         })}
         <StatCard
-          label={isHr ? "Awaiting your decision" : "My pending requests"}
-          value={isHr ? pending.length : myRequests.filter((r) => r.status === "pending").length}
+          label={canReviewTeam ? "Awaiting your decision" : "My pending requests"}
+          value={canReviewTeam ? pending.length : myRequests.filter((r) => r.status === "pending").length}
           hintTone="warn"
           hint="click to filter"
           onClick={() => toggle("pending")}
@@ -169,14 +186,14 @@ function LeaveBody() {
       {tile && (
         <FilterNote
           label="pending requests"
-          count={isHr ? shownTeam.length : shownMine.length}
+          count={canReviewTeam ? shownTeam.length : shownMine.length}
           onClear={() => setTile(null)}
         />
       )}
 
       <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 space-y-4">
-          {isHr && (
+          {canReviewTeam && (
             <Panel title={`Team requests · ${shownTeam.length}`}>
               <div className="overflow-x-auto">
                 <table className="w-full text-[13px]">
@@ -217,13 +234,20 @@ function LeaveBody() {
                             {r.status === "pending" ? (
                               <div className="flex justify-end gap-1.5">
                                 <button
-                                  onClick={() => decide.mutate({ id: r.id, status: "approved" })}
+                                  onClick={() => decide.mutate({ id: r.id, status: "approved", decisionNote: "" })}
                                   className="h-7 px-2.5 rounded-md bg-brand text-paper text-[11px] font-semibold cursor-pointer hover:bg-brand-deep"
                                 >
                                   Approve
                                 </button>
                                 <button
-                                  onClick={() => decide.mutate({ id: r.id, status: "rejected" })}
+                                  onClick={() => {
+                                    const decisionNote = window.prompt("Reason for rejecting this leave request:")?.trim();
+                                    if (!decisionNote) {
+                                      if (decisionNote !== null) toast.error("A rejection reason is required.");
+                                      return;
+                                    }
+                                    decide.mutate({ id: r.id, status: "rejected", decisionNote });
+                                  }}
                                   className="h-7 px-2.5 rounded-md ring-1 ring-line text-[11px] font-medium cursor-pointer hover:bg-ink/5"
                                 >
                                   Reject
@@ -260,6 +284,9 @@ function LeaveBody() {
                     <p className="text-[11px] font-mono text-ink-soft">
                       {fmtDate(r.start_date)} → {fmtDate(r.end_date)} · {r.days}d
                     </p>
+                    {r.status === "rejected" && r.decision_note && (
+                      <p className="mt-1 text-[12px] text-ink-soft">Reason: {r.decision_note}</p>
+                    )}
                   </div>
                   <div className="ml-auto flex items-center gap-2">
                     <StatusPill status={r.status} />
@@ -318,6 +345,13 @@ function LeaveBody() {
                 className="w-full h-10 rounded-md bg-brand text-paper text-[13px] font-semibold cursor-pointer hover:bg-brand-deep disabled:opacity-50"
               >
                 {apply.isPending ? "Submitting…" : "Submit request"}
+              </button>
+              <button
+                disabled={sendTestEmail.isPending || !me?.employee}
+                onClick={() => sendTestEmail.mutate()}
+                className="w-full h-9 rounded-md ring-1 ring-line text-[12px] font-medium cursor-pointer hover:bg-ink/5 disabled:opacity-50"
+              >
+                {sendTestEmail.isPending ? "Sending test email…" : "Send test email to manager"}
               </button>
             </div>
           </Panel>

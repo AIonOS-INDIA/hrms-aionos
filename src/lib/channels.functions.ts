@@ -19,7 +19,7 @@ export type ChannelsView = {
   whatsappNumber: string;
   teamsReady: boolean;
   outlookReady: boolean;
-  outlookConnected: boolean;
+  outlookActionableReady: boolean;
   channels: ChannelState[];
 };
 
@@ -73,17 +73,35 @@ export const getMyChannels = createServerFn({ method: "GET" })
       .select("*")
       .eq("employee_id", emp.id);
     const rows = (data ?? []) as any[];
-    const { data: connections } = await supabaseAdmin
-      .from("app_user_connections")
-      .select("connector_id")
-      .eq("user_id", (context as any).userId);
+    const signingSecret = process.env["APPROVAL_CARD_SIGNING_SECRET"];
+    const originator = process.env["OUTLOOK_ACTIONABLE_MESSAGE_ORIGINATOR"];
+    const publicAppUrl = process.env["APP_PUBLIC_URL"];
+    let publicHttpsUrl = false;
+    try {
+      publicHttpsUrl = Boolean(publicAppUrl && new URL(publicAppUrl).protocol === "https:");
+    } catch {
+      publicHttpsUrl = false;
+    }
     return {
       phone: emp.phone ?? "",
       whatsappReady: whatsappReady(),
       whatsappNumber: whatsappConfig().businessNumber,
       teamsReady: Boolean(process.env["MICROSOFT_TEAMS_APP_USER_CONNECTOR_CLIENT_API_KEY"]),
-      outlookReady: Boolean(process.env["MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY"]),
-      outlookConnected: (connections ?? []).some((row: any) => row.connector_id === "microsoft_outlook"),
+      outlookReady: Boolean(
+        process.env["MICROSOFT_TENANT_ID"] &&
+          process.env["MICROSOFT_CLIENT_ID"] &&
+          process.env["MICROSOFT_CLIENT_SECRET"] &&
+          process.env["OUTLOOK_SENDER_EMAIL"] &&
+          publicHttpsUrl,
+      ),
+      outlookActionableReady: Boolean(
+        originator &&
+          originator !== "..." &&
+          signingSecret &&
+          signingSecret.length >= 32 &&
+          signingSecret !== "..." &&
+          publicHttpsUrl,
+      ),
       channels: [
         toState("whatsapp", rows.find((r) => r.channel === "whatsapp"), maskHandle),
         toState("microsoft_teams", rows.find((r) => r.channel === "microsoft_teams"), (v) => v),
