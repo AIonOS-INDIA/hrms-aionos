@@ -26,6 +26,7 @@ import { Route as AuthenticatedHrAccountsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedLearningRouteImport } from './routes/_authenticated/learning'
 import { Route as AuthenticatedLeaveRouteImport } from './routes/_authenticated/leave'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
+import { Route as AuthenticatedOnboardingRequestsRouteImport } from './routes/_authenticated/onboarding-requests'
 import { Route as AuthenticatedOrgRouteImport } from './routes/_authenticated/org'
 import { Route as AuthenticatedPayrollRouteImport } from './routes/_authenticated/payroll'
 import { Route as AuthenticatedPerformanceRouteImport } from './routes/_authenticated/performance'
@@ -38,6 +39,10 @@ import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/t
 import { Route as AuthenticatedTimesheetsRouteImport } from './routes/_authenticated/timesheets'
 import { Route as ApiActionableApprovalRouteImport } from './routes/api/actionable/approval'
 import { Route as OauthTeamsReturnRouteImport } from './routes/oauth/teams/return'
+import { Route as ApiPublicLeaveDecisionRouteImport } from './routes/api/public/leave/decision'
+import { Route as ApiPublicLeaveNotifyRouteImport } from './routes/api/public/leave/notify'
+import { Route as ApiPublicOnboardingDecisionRouteImport } from './routes/api/public/onboarding/decision'
+import { Route as ApiPublicOnboardingSubmitRouteImport } from './routes/api/public/onboarding/submit'
 import { Route as ApiPublicWhatsappWebhookRouteImport } from './routes/api/public/whatsapp/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -125,6 +130,12 @@ const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedOnboardingRequestsRoute =
+  AuthenticatedOnboardingRequestsRouteImport.update({
+    id: '/onboarding-requests',
+    path: '/onboarding-requests',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOrgRoute = AuthenticatedOrgRouteImport.update({
   id: '/org',
   path: '/org',
@@ -187,6 +198,28 @@ const OauthTeamsReturnRoute = OauthTeamsReturnRouteImport.update({
   path: '/oauth/teams/return',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicLeaveDecisionRoute = ApiPublicLeaveDecisionRouteImport.update({
+  id: '/api/public/leave/decision',
+  path: '/api/public/leave/decision',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicLeaveNotifyRoute = ApiPublicLeaveNotifyRouteImport.update({
+  id: '/api/public/leave/notify',
+  path: '/api/public/leave/notify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicOnboardingDecisionRoute =
+  ApiPublicOnboardingDecisionRouteImport.update({
+    id: '/api/public/onboarding/decision',
+    path: '/api/public/onboarding/decision',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicOnboardingSubmitRoute =
+  ApiPublicOnboardingSubmitRouteImport.update({
+    id: '/api/public/onboarding/submit',
+    path: '/api/public/onboarding/submit',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWhatsappWebhookRoute =
   ApiPublicWhatsappWebhookRouteImport.update({
     id: '/api/public/whatsapp/webhook',
@@ -211,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/learning': typeof AuthenticatedLearningRoute
   '/leave': typeof AuthenticatedLeaveRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/onboarding-requests': typeof AuthenticatedOnboardingRequestsRoute
   '/org': typeof AuthenticatedOrgRoute
   '/payroll': typeof AuthenticatedPayrollRoute
   '/performance': typeof AuthenticatedPerformanceRoute
@@ -223,6 +257,10 @@ export interface FileRoutesByFullPath {
   '/timesheets': typeof AuthenticatedTimesheetsRoute
   '/api/actionable/approval': typeof ApiActionableApprovalRoute
   '/oauth/teams/return': typeof OauthTeamsReturnRoute
+  '/api/public/leave/decision': typeof ApiPublicLeaveDecisionRoute
+  '/api/public/leave/notify': typeof ApiPublicLeaveNotifyRoute
+  '/api/public/onboarding/decision': typeof ApiPublicOnboardingDecisionRoute
+  '/api/public/onboarding/submit': typeof ApiPublicOnboardingSubmitRoute
   '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -242,6 +280,7 @@ export interface FileRoutesByTo {
   '/learning': typeof AuthenticatedLearningRoute
   '/leave': typeof AuthenticatedLeaveRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/onboarding-requests': typeof AuthenticatedOnboardingRequestsRoute
   '/org': typeof AuthenticatedOrgRoute
   '/payroll': typeof AuthenticatedPayrollRoute
   '/performance': typeof AuthenticatedPerformanceRoute
@@ -254,6 +293,10 @@ export interface FileRoutesByTo {
   '/timesheets': typeof AuthenticatedTimesheetsRoute
   '/api/actionable/approval': typeof ApiActionableApprovalRoute
   '/oauth/teams/return': typeof OauthTeamsReturnRoute
+  '/api/public/leave/decision': typeof ApiPublicLeaveDecisionRoute
+  '/api/public/leave/notify': typeof ApiPublicLeaveNotifyRoute
+  '/api/public/onboarding/decision': typeof ApiPublicOnboardingDecisionRoute
+  '/api/public/onboarding/submit': typeof ApiPublicOnboardingSubmitRoute
   '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRoutesById {
@@ -275,6 +318,7 @@ export interface FileRoutesById {
   '/_authenticated/learning': typeof AuthenticatedLearningRoute
   '/_authenticated/leave': typeof AuthenticatedLeaveRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/onboarding-requests': typeof AuthenticatedOnboardingRequestsRoute
   '/_authenticated/org': typeof AuthenticatedOrgRoute
   '/_authenticated/payroll': typeof AuthenticatedPayrollRoute
   '/_authenticated/performance': typeof AuthenticatedPerformanceRoute
@@ -287,6 +331,10 @@ export interface FileRoutesById {
   '/_authenticated/timesheets': typeof AuthenticatedTimesheetsRoute
   '/api/actionable/approval': typeof ApiActionableApprovalRoute
   '/oauth/teams/return': typeof OauthTeamsReturnRoute
+  '/api/public/leave/decision': typeof ApiPublicLeaveDecisionRoute
+  '/api/public/leave/notify': typeof ApiPublicLeaveNotifyRoute
+  '/api/public/onboarding/decision': typeof ApiPublicOnboardingDecisionRoute
+  '/api/public/onboarding/submit': typeof ApiPublicOnboardingSubmitRoute
   '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRouteTypes {
@@ -308,6 +356,7 @@ export interface FileRouteTypes {
     | '/learning'
     | '/leave'
     | '/onboarding'
+    | '/onboarding-requests'
     | '/org'
     | '/payroll'
     | '/performance'
@@ -320,6 +369,10 @@ export interface FileRouteTypes {
     | '/timesheets'
     | '/api/actionable/approval'
     | '/oauth/teams/return'
+    | '/api/public/leave/decision'
+    | '/api/public/leave/notify'
+    | '/api/public/onboarding/decision'
+    | '/api/public/onboarding/submit'
     | '/api/public/whatsapp/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -339,6 +392,7 @@ export interface FileRouteTypes {
     | '/learning'
     | '/leave'
     | '/onboarding'
+    | '/onboarding-requests'
     | '/org'
     | '/payroll'
     | '/performance'
@@ -351,6 +405,10 @@ export interface FileRouteTypes {
     | '/timesheets'
     | '/api/actionable/approval'
     | '/oauth/teams/return'
+    | '/api/public/leave/decision'
+    | '/api/public/leave/notify'
+    | '/api/public/onboarding/decision'
+    | '/api/public/onboarding/submit'
     | '/api/public/whatsapp/webhook'
   id:
     | '__root__'
@@ -371,6 +429,7 @@ export interface FileRouteTypes {
     | '/_authenticated/learning'
     | '/_authenticated/leave'
     | '/_authenticated/onboarding'
+    | '/_authenticated/onboarding-requests'
     | '/_authenticated/org'
     | '/_authenticated/payroll'
     | '/_authenticated/performance'
@@ -383,6 +442,10 @@ export interface FileRouteTypes {
     | '/_authenticated/timesheets'
     | '/api/actionable/approval'
     | '/oauth/teams/return'
+    | '/api/public/leave/decision'
+    | '/api/public/leave/notify'
+    | '/api/public/onboarding/decision'
+    | '/api/public/onboarding/submit'
     | '/api/public/whatsapp/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -393,6 +456,10 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiActionableApprovalRoute: typeof ApiActionableApprovalRoute
   OauthTeamsReturnRoute: typeof OauthTeamsReturnRoute
+  ApiPublicLeaveDecisionRoute: typeof ApiPublicLeaveDecisionRoute
+  ApiPublicLeaveNotifyRoute: typeof ApiPublicLeaveNotifyRoute
+  ApiPublicOnboardingDecisionRoute: typeof ApiPublicOnboardingDecisionRoute
+  ApiPublicOnboardingSubmitRoute: typeof ApiPublicOnboardingSubmitRoute
   ApiPublicWhatsappWebhookRoute: typeof ApiPublicWhatsappWebhookRoute
 }
 
@@ -517,6 +584,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/onboarding-requests': {
+      id: '/_authenticated/onboarding-requests'
+      path: '/onboarding-requests'
+      fullPath: '/onboarding-requests'
+      preLoaderRoute: typeof AuthenticatedOnboardingRequestsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/org': {
       id: '/_authenticated/org'
       path: '/org'
@@ -601,6 +675,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthTeamsReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/leave/decision': {
+      id: '/api/public/leave/decision'
+      path: '/api/public/leave/decision'
+      fullPath: '/api/public/leave/decision'
+      preLoaderRoute: typeof ApiPublicLeaveDecisionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/leave/notify': {
+      id: '/api/public/leave/notify'
+      path: '/api/public/leave/notify'
+      fullPath: '/api/public/leave/notify'
+      preLoaderRoute: typeof ApiPublicLeaveNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/onboarding/decision': {
+      id: '/api/public/onboarding/decision'
+      path: '/api/public/onboarding/decision'
+      fullPath: '/api/public/onboarding/decision'
+      preLoaderRoute: typeof ApiPublicOnboardingDecisionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/onboarding/submit': {
+      id: '/api/public/onboarding/submit'
+      path: '/api/public/onboarding/submit'
+      fullPath: '/api/public/onboarding/submit'
+      preLoaderRoute: typeof ApiPublicOnboardingSubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/whatsapp/webhook': {
       id: '/api/public/whatsapp/webhook'
       path: '/api/public/whatsapp/webhook'
@@ -625,6 +727,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLearningRoute: typeof AuthenticatedLearningRoute
   AuthenticatedLeaveRoute: typeof AuthenticatedLeaveRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+  AuthenticatedOnboardingRequestsRoute: typeof AuthenticatedOnboardingRequestsRoute
   AuthenticatedOrgRoute: typeof AuthenticatedOrgRoute
   AuthenticatedPayrollRoute: typeof AuthenticatedPayrollRoute
   AuthenticatedPerformanceRoute: typeof AuthenticatedPerformanceRoute
@@ -651,6 +754,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLearningRoute: AuthenticatedLearningRoute,
   AuthenticatedLeaveRoute: AuthenticatedLeaveRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+  AuthenticatedOnboardingRequestsRoute: AuthenticatedOnboardingRequestsRoute,
   AuthenticatedOrgRoute: AuthenticatedOrgRoute,
   AuthenticatedPayrollRoute: AuthenticatedPayrollRoute,
   AuthenticatedPerformanceRoute: AuthenticatedPerformanceRoute,
@@ -673,6 +777,10 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ApiActionableApprovalRoute: ApiActionableApprovalRoute,
   OauthTeamsReturnRoute: OauthTeamsReturnRoute,
+  ApiPublicLeaveDecisionRoute: ApiPublicLeaveDecisionRoute,
+  ApiPublicLeaveNotifyRoute: ApiPublicLeaveNotifyRoute,
+  ApiPublicOnboardingDecisionRoute: ApiPublicOnboardingDecisionRoute,
+  ApiPublicOnboardingSubmitRoute: ApiPublicOnboardingSubmitRoute,
   ApiPublicWhatsappWebhookRoute: ApiPublicWhatsappWebhookRoute,
 }
 export const routeTree = rootRouteImport

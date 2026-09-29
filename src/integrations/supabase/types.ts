@@ -1587,6 +1587,112 @@ export type Database = {
           },
         ]
       }
+      onboarding_requests: {
+        Row: {
+          address: string
+          approver_email: string
+          approver_id: string
+          approver_name: string
+          company_id: string
+          college: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by_email: string | null
+          decision_note: string | null
+          department: string | null
+          designation: string | null
+          email_error: string | null
+          email_sent_at: string | null
+          end_date: string | null
+          full_name: string
+          id: string
+          joining_type: string
+          personal_email: string
+          phone: string | null
+          requested_by: string
+          requested_by_name: string
+          start_date: string
+          status: Database["public"]["Enums"]["request_status"]
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          approver_email: string
+          approver_id: string
+          approver_name: string
+          company_id: string
+          college?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by_email?: string | null
+          decision_note?: string | null
+          department?: string | null
+          designation?: string | null
+          email_error?: string | null
+          email_sent_at?: string | null
+          end_date?: string | null
+          full_name: string
+          id?: string
+          joining_type: string
+          personal_email: string
+          phone?: string | null
+          requested_by: string
+          requested_by_name: string
+          start_date: string
+          status?: Database["public"]["Enums"]["request_status"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          approver_email?: string
+          approver_id?: string
+          approver_name?: string
+          company_id?: string
+          college?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by_email?: string | null
+          decision_note?: string | null
+          department?: string | null
+          designation?: string | null
+          email_error?: string | null
+          email_sent_at?: string | null
+          end_date?: string | null
+          full_name?: string
+          id?: string
+          joining_type?: string
+          personal_email?: string
+          phone?: string | null
+          requested_by?: string
+          requested_by_name?: string
+          start_date?: string
+          status?: Database["public"]["Enums"]["request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_requests_approver_id_fkey"
+            columns: ["approver_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_balances: {
         Row: {
           employee_id: string

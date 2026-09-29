@@ -79,6 +79,7 @@ const NAV: NavItem[] = [
     managerOnly: true,
   },
   { to: "/onboarding", label: "Joining", group: "My workspace", icon: UserPlus, hrOnly: false },
+  { to: "/onboarding-requests", label: "Onboarding requests", group: "My workspace", icon: UserPlus, hrOnly: false },
   { to: "/separation", label: "Separation", group: "My workspace", icon: UserMinus, hrOnly: false },
   { to: "/attendance", label: "Attendance", group: "My workspace", icon: Fingerprint, hrOnly: false },
   { to: "/timesheets", label: "Timesheets", group: "My workspace", icon: Clock3, hrOnly: false },
