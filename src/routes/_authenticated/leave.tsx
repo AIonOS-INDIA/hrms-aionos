@@ -31,6 +31,43 @@ export const Route = createFileRoute("/_authenticated/leave")({
   component: LeavePage,
 });
 
+type NotifyResult = { ok: boolean; managerName?: string; message?: string; error?: string };
+
+/**
+ * After a leave request is saved, asks the server to email the manager an Outlook
+ * Approve / Deny card. Never throws: the leave is already saved either way.
+ */
+async function notifyManager(requestId: string): Promise<NotifyResult> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return { ok: false, message: "Leave saved, but the approval email was not sent (not logged in)." };
+    const response = await fetch("/api/public/leave/notify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ requestId }),
+    });
+    let data: NotifyResult | null = null;
+    try {
+      data = (await response.json()) as NotifyResult;
+    } catch {
+      // no JSON body
+    }
+    if (!data) return { ok: false, message: `Leave saved, but the approval email was not sent (${response.status}).` };
+    if (!response.ok) return { ok: false, message: data.error ?? data.message ?? "Leave saved, but the approval email was not sent." };
+    return data;
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Leave saved, but the approval email was not sent: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 function LeavePage() {
   return (
     <AppShell title="Leave" subtitle="Balances, requests and approvals">
@@ -75,24 +112,35 @@ function LeaveBody() {
   const myRequests = requests.filter((r) => r.employee_id === myId);
 
   const apply = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<NotifyResult> => {
       if (!myId) throw new Error("Your employee record is not linked yet");
       const typeId = form.leave_type_id || types[0]?.id;
       if (!typeId) throw new Error("Pick a leave type");
       if (form.end_date < form.start_date) throw new Error("End date is before the start date");
-      const { error } = await supabase.from("leave_requests").insert({
-        employee_id: myId,
-        leave_type_id: typeId,
-        start_date: form.start_date,
-        end_date: form.end_date,
-        days: daysBetween(form.start_date, form.end_date),
-        reason: form.reason,
-        status: "pending",
-      });
+      const { data: created, error } = await supabase
+        .from("leave_requests")
+        .insert({
+          employee_id: myId,
+          leave_type_id: typeId,
+          start_date: form.start_date,
+          end_date: form.end_date,
+          days: daysBetween(form.start_date, form.end_date),
+          reason: form.reason,
+          status: "pending",
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+      // Email the manager an Outlook card (the leave is saved even if this fails).
+      return notifyManager(created.id);
     },
-    onSuccess: () => {
-      toast.success("Leave request submitted");
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success(`Leave request sent to ${result.managerName ?? "your manager"} for approval`);
+      } else {
+        toast.success("Leave request submitted");
+        if (result.message) toast.warning(result.message);
+      }
       setForm({ ...form, reason: "" });
       queryClient.invalidateQueries({ queryKey: ["leave_requests"] });
     },
